@@ -1,0 +1,93 @@
+import { createRouter, createWebHistory } from 'vue-router';
+
+// Lazy load pages
+const LoginPage = () => import('@/pages/LoginPage.vue');
+const HomePage = () => import('@/pages/HomePage.vue');
+const GalleryPage = () => import('@/pages/GalleryPage.vue');
+
+const routes = [
+    //rutas
+    {
+      path: "/",
+      redirect: "/login"
+    },
+    {
+        path: '/:pathMatch(.*)*',
+        name: 'notfound',
+        redirect: '/login'
+    },
+    {
+        path: '/login', 
+        name: 'login',
+        component: LoginPage,
+        meta: { requiresAuth: false }
+    },
+    {
+        path: '/home',
+        name: 'home',
+        component: HomePage,
+        meta: { requiresAuth: true },
+        children: [
+            {
+                path: 'galeria',
+                name: 'galeria',
+                component: GalleryPage,
+                meta: { requiresAuth: true }
+            }
+        ]
+    }
+
+];
+
+
+const router = createRouter({
+    history: createWebHistory(),
+    routes,
+    scrollBehavior(to, from, savedPosition) {
+        if (to.hash) {
+            return {
+                el: to.hash,
+                behavior: 'smooth'
+            }
+        }
+        return { top: 0 }
+    }
+});
+
+// Guard global para proteger rutas
+router.beforeEach((to, from, next) => {
+    // Verificar token en localStorage
+    const accessToken = localStorage.getItem('accessToken');
+    const user = localStorage.getItem('user');
+    const isAuthenticated = !!accessToken;
+
+    let userData = null;
+    try {
+        userData = user ? JSON.parse(user) : null;
+    } catch (e) {
+        userData = null;
+    }
+
+    // Si la ruta requiere autenticación
+    if (to.meta.requiresAuth) {
+        if (!isAuthenticated) {
+            next('/login');
+            return;
+        }
+        next();
+    }
+    // Si la ruta es solo para usuarios no autenticados (login/register)
+    else if (to.meta.requiresGuest) {
+        if (isAuthenticated) {
+            next('/home');
+            return;
+        }
+        next();
+    }
+    else {
+        next();
+    }
+
+});
+
+export default router;
