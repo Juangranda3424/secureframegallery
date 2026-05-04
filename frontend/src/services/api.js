@@ -41,6 +41,9 @@ apiClient.interceptors.response.use(
                     );
 
                     localStorage.setItem('accessToken', data.accessToken);
+                    if (data.refreshToken) {
+                        localStorage.setItem('refreshToken', data.refreshToken);
+                    }
                     originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
                     return apiClient(originalRequest);
                 }
@@ -59,5 +62,4 @@ apiClient.interceptors.response.use(
 );
 
 export default apiClient;
-
 

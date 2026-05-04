@@ -4,6 +4,7 @@ import { createRouter, createWebHistory } from 'vue-router';
 const LoginPage = () => import('@/pages/LoginPage.vue');
 const HomePage = () => import('@/pages/HomePage.vue');
 const GalleryPage = () => import('@/pages/GalleryPage.vue');
+const SupervisorPage = () => import('@/pages/SupervisorPage.vue');
 
 const routes = [
     //rutas
@@ -32,6 +33,12 @@ const routes = [
                 path: 'galeria',
                 name: 'galeria',
                 component: GalleryPage,
+                meta: { requiresAuth: true }
+            },
+            {
+                path: 'supervisor',
+                name: 'supervisor',
+                component: SupervisorPage,
                 meta: { requiresAuth: true }
             }
         ]

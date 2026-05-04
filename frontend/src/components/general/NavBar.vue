@@ -53,12 +53,18 @@ onMounted(() => {
 
 const items = computed(() => {
     const baseItems = [
-        { 
-            label: 'Galería', 
-            icon: 'pi pi-chart-bar', 
+        {
+            label: 'Galería',
+            icon: 'pi pi-chart-bar',
             command: () => router.push('/home/galeria'),
             class: route.path.includes('galeria') ? 'active-item' : ''
         },
+        {
+            label: 'Supervisor',
+            icon: 'pi pi-shield',
+            command: () => router.push('/home/supervisor'),
+            class: route.path.includes('supervisor') ? 'active-item' : ''
+        }
     ];
     return baseItems
 });
