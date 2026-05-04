@@ -4,3 +4,9 @@ pydantic
 python-dotenv
 dotenv
 supabase
+python-multipart
+python-magic
+Pillow
+piexif
+numpy
+slowapi
