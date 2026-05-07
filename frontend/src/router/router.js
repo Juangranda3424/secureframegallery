@@ -27,6 +27,7 @@ const routes = [
         path: '/home',
         name: 'home',
         component: HomePage,
+        redirect: '/home/galeria',
         meta: { requiresAuth: true },
         children: [
             {
@@ -39,7 +40,7 @@ const routes = [
                 path: 'supervisor',
                 name: 'supervisor',
                 component: SupervisorPage,
-                meta: { requiresAuth: true }
+                meta: { requiresAuth: true, allowedRoles: ['supervisor', 'admin'] }
             }
         ]
     }
@@ -80,6 +81,13 @@ router.beforeEach((to, from, next) => {
         if (!isAuthenticated) {
             next('/login');
             return;
+        }
+        if (to.meta.allowedRoles) {
+            const role = typeof userData === 'object' && userData ? userData.role : null;
+            if (!to.meta.allowedRoles.includes(role)) {
+                next('/home/galeria');
+                return;
+            }
         }
         next();
     }

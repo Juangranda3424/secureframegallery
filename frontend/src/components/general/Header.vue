@@ -1,12 +1,14 @@
 <template>
     <ConfirmDialog></ConfirmDialog>
-    <div class="header-promotion">
-        <div class="container_buttons-social-media">
-            <div class="button_mode">
-                <img :src="LogoDark" alt="Logo" style="width: 100px; padding: 10%; border-radius: 20%;" />
+    <div class="app-header">
+        <div class="brand">
+            <img :src="LogoDark" alt="Logo SecureFrame Gallery" />
+            <div>
+                <strong>SecureFrame Gallery</strong>
+                <span>Revision segura de imagenes</span>
             </div>
         </div>
-        <div class="button_dark_mode">
+        <div class="header-actions">
             <Button icon="pi pi-sign-out" severity="danger" label="Cerrar Sesión" size="large" @click="handleLogout"
                 :title="'Cerrar sesión'" />
         </div>
@@ -58,47 +60,48 @@ const handleLogout = () => {
 </script>
 
 <style scoped>
-.header {
+.app-header {
     display: flex;
+    align-items: center;
     justify-content: space-between;
-    align-items: center;
-    padding: 0.5rem 1rem;
+    gap: 1rem;
+    padding: 18px 24px;
+    border-bottom: 1px solid #e4e7ec;
+    background: #fff;
 }
 
-.header-promotion {
+.brand {
     display: flex;
-    justify-content: space-between;
-    width: 100%;
-    border-bottom: solid 1px rgba(0, 0, 0, 0.374);
-
-}
-
-.button_mode {
-    display: flexbox;
-    justify-content: center;
     align-items: center;
-    margin-left: 0.5rem;
+    gap: 14px;
 }
 
-.button_dark_mode {
+.brand img {
+    width: 76px;
+    height: 76px;
+    object-fit: cover;
+    border-radius: 8px;
+}
+
+.brand strong,
+.brand span {
+    display: block;
+}
+
+.brand strong {
+    color: #091350;
+    font-size: 1.1rem;
+}
+
+.brand span {
+    margin-top: 2px;
+    color: #667085;
+}
+
+.header-actions {
     display: flex;
-    justify-content: center;
     align-items: center;
-    margin-right: 0.5rem;
     gap: 0.5rem;
-    padding: 1rem;
-}
-
-.text-promotion {
-    color: white;
-    display: flex;
-    flex-direction: row;
-    justify-content: center;
-    align-items: center;
-    margin: 0%;
-    padding: 0%;
-    gap: 0.5rem;
-    margin-top: 0.2rem;
 }
 
 .loading-overlay {

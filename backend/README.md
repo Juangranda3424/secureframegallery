@@ -17,8 +17,12 @@ Crea `backend/.env`:
 ```env
 SUPABASE_URL=https://tu-proyecto.supabase.co
 SUPABASE_ANON_KEY=tu-llave-anon
+# Opcional, solo backend: evita el limite de emails de Supabase al registrar usuarios
+SUPABASE_SERVICE_ROLE_KEY=tu-service-role-key
 CORS_ORIGINS=http://localhost:5173
 ```
+
+Si `SUPABASE_SERVICE_ROLE_KEY` esta configurada, `POST /api/v1/auth/register` crea el usuario con Supabase Admin y lo deja confirmado sin enviar correo. No pongas esta llave en el frontend ni en codigo publico.
 
 El frontend debe tener `frontend/.env`:
 

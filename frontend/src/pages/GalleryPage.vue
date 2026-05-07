@@ -1,90 +1,99 @@
 <template>
     <main class="gallery-page">
-        <section class="toolbar">
-            <h2>Mis albumes</h2>
+        <GalleryHeader :loading="loading" @refresh="loadAlbums" />
 
-            <form @submit.prevent="createAlbum" class="album-form">
-                <input v-model="form.title" maxlength="100"
-                    placeholder="Título del álbum" required>
-                    <textarea v-model="form.description" maxlength="500" placeholder="Descripcion"></textarea>
-                    <button type="submit" :disabled="loading">Solicitar album</button>
+        <GallerySummary
+            :total="albums.length"
+            :approved="approvedCount"
+            :pending="pendingCount"
+        />
 
-            </form>
-        </section>
+        <GalleryTabs
+            :active-tab="activeTab"
+            :has-selected-album="!!selectedAlbum"
+            @change="activeTab = $event"
+        />
 
-        <section class="album-grid">
-            <article
-            v-for="album in albums"
-            :key="album.id"
-            class="album-card"
-            @click="selectAlbum(album)"
-            >
-            <h3>{{ album.title }}</h3>
-            <p>{{ album.description }}</p>
-            <span>{{ album.status || "pending" }}</span>
-        </article>
-        </section>
+        <AlbumRequestForm
+            v-if="activeTab === 'request'"
+            :loading="loading"
+            @submit="createAlbum"
+        />
 
-        <section v-if="selectedAlbum" class="images-panel">
-            <h2>{{ selectedAlbum.title }}</h2>
+        <AlbumList
+            v-if="activeTab === 'albums'"
+            :albums="albums"
+            :selected-album-id="selectedAlbum?.id"
+            @select="selectAlbum"
+        />
 
-            <input
-            v-if="selectedAlbum.status === 'approved'"
-            type="file"
-            accept="image/png,image/jpeg,image/webp,image/gif"
-            @change="uploadImage"
-            />
-
-            <p v-else>Este album todavia no esta aprobado</p>
-
-            <div class="image-grid">
-                <img
-                v-for="image in images"
-                :key="image.id"
-                :src="apiUrl + image.file_path"
-                :alt="selectedAlbum.title">
-            </div>
-
-        </section>
-
+        <ImageUploadPanel
+            v-if="activeTab === 'images' && selectedAlbum"
+            :album="selectedAlbum"
+            :images="images"
+            :api-url="apiUrl"
+            :uploading="uploading"
+            :upload-result="uploadResult"
+            :active-analysis-step="activeAnalysisStep"
+            :analysis-steps="analysisSteps"
+            @back="activeTab = 'albums'"
+            @upload="uploadImage"
+        />
     </main>
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
+import { onBeforeRouteUpdate } from "vue-router";
 import albumService from "@/services/albumService.js";
 import imageService from "@/services/imageService.js";
+import GalleryHeader from "@/components/gallery/GalleryHeader.vue";
+import GallerySummary from "@/components/gallery/GallerySummary.vue";
+import GalleryTabs from "@/components/gallery/GalleryTabs.vue";
+import AlbumRequestForm from "@/components/gallery/AlbumRequestForm.vue";
+import AlbumList from "@/components/gallery/AlbumList.vue";
+import ImageUploadPanel from "@/components/gallery/ImageUploadPanel.vue";
 
 const apiUrl = import.meta.env.VITE_API_URL.replace("/api/v1","");
 const albums = ref([]);
 const images = ref([]);
 const selectedAlbum = ref(null);
 const loading = ref(false);
+const activeTab = ref("albums");
+const uploading = ref(false);
+const activeAnalysisStep = ref("");
+const uploadResult = ref(null);
+const analysisSteps = [
+    { key: "upload", label: "Recibiendo archivo" },
+    { key: "metadata", label: "Limpiando metadatos EXIF" },
+    { key: "stego", label: "Analizando imagen por esteganografia" },
+    { key: "decision", label: "Registrando resultado de revision" },
+];
 
-const form = reactive({
-    title: "",
-    description: "",
-});
+const approvedCount = computed(() => albums.value.filter((album) => album.status === "approved").length);
+const pendingCount = computed(() => albums.value.filter((album) => (album.status || "pending") === "pending").length);
 
 async function loadAlbums() {
     const { data } = await albumService.getAll();
     albums.value = data;
+
+    if (selectedAlbum.value) {
+        const freshAlbum = data.find((album) => album.id === selectedAlbum.value.id);
+        selectedAlbum.value = freshAlbum || null;
+    }
 }
 
-async function createAlbum() {
-    if (!form.title.trim()) return;
-
+async function createAlbum(album) {
     loading.value = true;
     try {
         await albumService.create({
-            title: form.title,
-            description: form.description,
+            title: album.title,
+            description: album.description,
             initial_priv: true
         });
 
-        form.title = "";
-        form.description = "";
         await loadAlbums();
+        activeTab.value = "albums";
     } finally {
         loading.value = false;
     }
@@ -92,7 +101,10 @@ async function createAlbum() {
 
 async function selectAlbum(album) {
     selectedAlbum.value = album;
+    activeTab.value = "images";
     images.value = [];
+    uploadResult.value = null;
+    activeAnalysisStep.value = "";
 
     if (album.status === "approved") {
         const { data } = await imageService.list(album.id);
@@ -104,67 +116,72 @@ async function uploadImage(event) {
     const file = event.target.files?.[0];
     if (!file || !selectedAlbum.value) return;
 
-    await imageService.upload(selectedAlbum.value.id, file);
-    const { data} = await imageService.list(selectedAlbum.value.id);
-    images.value = data;
-    event.target.value = "";
+    uploading.value = true;
+    uploadResult.value = null;
+    activeAnalysisStep.value = "upload";
+
+    try {
+        await wait(450);
+        activeAnalysisStep.value = "metadata";
+        await wait(450);
+        activeAnalysisStep.value = "stego";
+
+        const { data: uploadedImage } = await imageService.upload(selectedAlbum.value.id, file);
+        activeAnalysisStep.value = "decision";
+        await wait(350);
+
+        const { data } = await imageService.list(selectedAlbum.value.id);
+        images.value = data;
+        uploadResult.value = buildUploadResult(uploadedImage);
+        event.target.value = "";
+    } catch (error) {
+        uploadResult.value = {
+            status: "rejected",
+            message: error.response?.data?.detail || "No se pudo completar el analisis de la imagen."
+        };
+    } finally {
+        uploading.value = false;
+    }
+}
+
+function buildUploadResult(image) {
+    if (image.status === "quarantined") {
+        return {
+            status: "quarantined",
+            message: "La imagen fue marcada como sospechosa y quedo en cuarentena para revision del supervisor."
+        };
+    }
+
+    return {
+        status: "approved",
+        message: "La imagen paso la revision de esteganografia y fue aprobada."
+    };
+}
+
+function wait(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 onMounted(loadAlbums);
-
+onBeforeRouteUpdate(async () => {
+    await loadAlbums();
+});
 </script>
 
 <style scoped>
 .gallery-page {
-  padding: 24px;
-}
-
-.toolbar {
   display: grid;
-  gap: 16px;
-  margin-bottom: 24px;
-}
-
-.album-form {
-  display: grid;
-  gap: 12px;
-  max-width: 520px;
-}
-
-.album-form input,
-.album-form textarea {
-  padding: 10px;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-}
-
-.album-grid,
-.image-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 16px;
-}
-
-.album-card {
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  padding: 16px;
-  cursor: pointer;
-}
-
-.album-card:hover {
-  border-color: #091350;
-}
-
-.images-panel {
-  margin-top: 32px;
-}
-
-.image-grid img {
+  align-content: start;
   width: 100%;
-  aspect-ratio: 1;
-  object-fit: cover;
-  border-radius: 8px;
+  min-height: calc(100vh - 210px);
+  padding: 32px;
+  background: #f7f8fb;
+  color: #101828;
 }
 
+@media (max-width: 760px) {
+  .gallery-page {
+    padding: 18px;
+  }
+}
 </style>

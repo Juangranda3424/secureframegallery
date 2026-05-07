@@ -1,13 +1,16 @@
 <template>
     <div>
-        <Menubar    
+        <Menubar
+            class="app-nav"
             :model="items"
-            style="font-size: 1.1rem; background-color: #f6f6f6;" 
             >
             <template #start>
-                <div style="padding: 20% 0% 20% 0%; display: flex; align-items: center; gap: 0.5rem;">
+                <div class="nav-user">
                     <Button icon="pi pi-user" severity="contrast" variant="text" rounded aria-label="User" />
-                    <span style="color: #000; font-weight: 500; margin-right: 10%;">{{ userName }}</span>
+                    <div>
+                        <strong>{{ userName }}</strong>
+                        <span>{{ userRole }}</span>
+                    </div>
                 </div>
             </template>
             <template #separator> 
@@ -25,6 +28,7 @@ import { ref, onMounted, computed } from "vue";
 import { useRoute } from 'vue-router';
 const route = useRoute();
 const userName = ref('');
+const userRole = ref('user');
 const isDark = ref(false);
 
 // Detectar cuando PrimeVue cambia a modo oscuro
@@ -37,8 +41,13 @@ onMounted(() => {
 
     const storedUser = localStorage.getItem('user');
     if (storedUser) {
-        // Quitar comillas dobles si existen
-        userName.value = storedUser.replace(/^"|"$/g, '').toUpperCase();
+        const parsedUser = JSON.parse(storedUser);
+        if (typeof parsedUser === 'string') {
+            userName.value = parsedUser.toUpperCase();
+        } else {
+            userName.value = (parsedUser.name || parsedUser.email || '').toUpperCase();
+            userRole.value = parsedUser.role || 'user';
+        }
     }
 
     // Observar cambios en la clase del <html>
@@ -58,14 +67,18 @@ const items = computed(() => {
             icon: 'pi pi-chart-bar',
             command: () => router.push('/home/galeria'),
             class: route.path.includes('galeria') ? 'active-item' : ''
-        },
-        {
+        }
+    ];
+
+    if (['supervisor', 'admin'].includes(userRole.value)) {
+        baseItems.push({
             label: 'Supervisor',
             icon: 'pi pi-shield',
             command: () => router.push('/home/supervisor'),
             class: route.path.includes('supervisor') ? 'active-item' : ''
-        }
-    ];
+        });
+    }
+
     return baseItems
 });
 
@@ -75,11 +88,43 @@ const items = computed(() => {
 
 
 :deep(.p-menubar-item-icon) {
-    color: rgb(0, 0, 0) !important;
+    color: #344054 !important;
 }
 
 :deep(.p-menubar-item-label) {
-    color: rgb(0, 0, 0) !important;
+    color: #344054 !important;
+}
+
+:deep(.app-nav) {
+    padding: 14px 20px;
+    border: 0;
+    border-bottom: 1px solid #e4e7ec;
+    border-radius: 0;
+    background: #fff !important;
+}
+
+.nav-user {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 190px;
+    margin-right: 14px;
+}
+
+.nav-user strong,
+.nav-user span {
+    display: block;
+}
+
+.nav-user strong {
+    color: #101828;
+    font-weight: 800;
+}
+
+.nav-user span {
+    color: #667085;
+    font-size: 0.82rem;
+    text-transform: capitalize;
 }
 
 /* Hover */
@@ -89,13 +134,13 @@ const items = computed(() => {
 }
 
 :deep(.p-menubar-item-content:hover) {
-    background-color: #DB2626 !important;
+    background-color: #d32626 !important;
     border-radius: 8px;
 }
 
 /* Focus */
 :deep(.p-menubar-item.p-focus > .p-menubar-item-content) {
-    background-color: #DB2626 !important;
+    background-color: #d32626 !important;
     border-radius: 8px;
 }
 

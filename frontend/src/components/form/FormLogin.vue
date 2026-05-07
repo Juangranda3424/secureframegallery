@@ -11,10 +11,10 @@
             <div class="container-login-card">
                 <IftaLabel class="login-div">
                     <IconField>
-                        <InputIcon class="pi pi-user" />
-                        <InputText id="emailuser" v-model="username" class="components-login" @keypress.enter="login()" :disabled="isLoading"/>
+                        <InputIcon class="pi pi-envelope" />
+                        <InputText id="emailuser" v-model="email" type="email" class="components-login" @keypress.enter="login()" :disabled="isLoading"/>
                     </IconField>
-                    <label for="emailuser">Usuario</label>
+                    <label for="emailuser">Correo electrónico</label>
                 </IftaLabel>
             </div>
             <div class="container-login-card">
@@ -66,23 +66,29 @@ const router = useRouter();
 const { login: authLogin } = useAuth();
 const { msjShow } = useToastGlobal();
 
-const username = ref('');
+const email = ref('');
 const password = ref('');
 const isLoading = ref(false);
 
 const login = async () => {
 
     // 1. Validación básica de campos vacíos
-    if (!username.value.trim() || !password.value.trim()) {
+    if (!email.value.trim() || !password.value.trim()) {
         msjShow('error', 'Campos requeridos', 'Por favor complete todos los campos', 3000);
         return; // Detenemos la ejecución
+    }
+
+    const normalizedEmail = email.value.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+        msjShow('error', 'Correo inválido', 'Ingrese el correo electrónico completo', 3000);
+        return;
     }
 
     isLoading.value = true;
 
     try {
         // 2. Llamada al servicio de autenticación
-        await authLogin(username.value, password.value);
+        await authLogin(normalizedEmail, password.value);
 
         msjShow('success', 'Éxito', 'Inicio de sesión exitoso', 2000);
 

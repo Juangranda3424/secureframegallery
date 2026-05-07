@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, Header, Request
 from pydantic import BaseModel
 from services.auth import login as auth_login
-from config.db import supabase
+from config.db import supabase, supabase_admin
 from services.rate_limit import limiter
 import re
 
@@ -54,22 +54,50 @@ async def register(data: RegisterSchema):
     validate_password(data.password)
 
     try:
-        auth_response = supabase.auth.sign_up({
-            "email": data.email,
-            "password": data.password
-        })
+        if supabase_admin:
+            auth_response = supabase_admin.auth.admin.create_user({
+                "email": data.email,
+                "password": data.password,
+                "email_confirm": True,
+                "user_metadata": {"name": data.name},
+            })
+        else:
+            auth_response = supabase.auth.sign_up({
+                "email": data.email,
+                "password": data.password,
+                "options": {
+                    "data": {"name": data.name}
+                }
+            })
+
+        if not auth_response.user:
+            raise HTTPException(status_code=400, detail="Supabase no devolvio un usuario al registrarse")
 
         user_id = auth_response.user.id
 
-        supabase.table("profiles").insert({
+        db = supabase_admin or supabase
+        db.table("profiles").upsert({
             "id": user_id,
             "name": data.name,
             "role": "user"
         }).execute()
 
         return { "message" : "Usuario registrado correctamente"}
-    except Exception:
-        raise HTTPException(status_code=400, detail="Error al registrar el usuario")
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        print(f"Error al registrar usuario: {type(e).__name__}: {e}")
+        error_text = str(e)
+        if "rate limit" in error_text.lower():
+            raise HTTPException(
+                status_code=429,
+                detail=(
+                    "Supabase alcanzo el limite de envio de emails. "
+                    "Espera a que se reinicie la cuota o configura SUPABASE_SERVICE_ROLE_KEY "
+                    "en backend/.env para registrar usuarios confirmados desde el backend."
+                )
+            )
+        raise HTTPException(status_code=400, detail=f"Error al registrar el usuario: {e}")
 
 
 @router.post("/login")

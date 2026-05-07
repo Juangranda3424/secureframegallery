@@ -15,13 +15,26 @@ def detect_steganography(image_bytes: bytes) -> dict:
     entropy = calculate_entropy(arr)
 
     eof_suspicious = has_trailing_data(image_bytes)
-    is_suspicious = lsb_analysis["anomaly_score"] > 0.7 or entropy > 7.8 or eof_suspicious
+    lsb_balance_score = lsb_analysis["anomaly_score"]
+    suspicious_reasons = []
+
+    if eof_suspicious:
+        suspicious_reasons.append("Datos extra detectados despues del final del archivo")
+
+    # La entropia alta por si sola no prueba esteganografia: muchas fotos normales,
+    # imagenes con ruido o JPEG/WebP comprimidos pueden acercarse a 8 bits.
+    # Solo la usamos como senal fuerte cuando ademas los LSB estan casi perfectamente balanceados.
+    if entropy > 7.95 and lsb_balance_score < 0.03:
+        suspicious_reasons.append("Entropia muy alta con LSB casi perfectamente balanceado")
+
+    is_suspicious = len(suspicious_reasons) > 0
 
     return {
         "is_suspicious": is_suspicious,
-        "confidence": max(lsb_analysis["anomaly_score"], entropy / 8),
+        "confidence": max(lsb_balance_score, entropy / 8) if is_suspicious else min(max(lsb_balance_score, entropy / 8), 0.49),
+        "reasons": suspicious_reasons,
         "details": {
-            "lsb_anomaly": lsb_analysis["anomaly_score"],
+            "lsb_balance_score": lsb_balance_score,
             "entropy": entropy,
             "eof_suspicious": eof_suspicious
         }
@@ -46,7 +59,7 @@ def analyze_lsb_pattern(arr):
     return {"anomaly_score": float(ratio)}
 
 #esta funcion calcula la entropia de una imagen, que es una medida de su aleatoriedad.
-#la entreopia se trata de una imagen normal, la entropia suele ser alta, mientras que una imagen con esteganografia puede tener una entropia mas baja debido a patrones repetitivos en los bits menos significativos.
+#la entropia alta puede aparecer en imagenes normales comprimidas o con mucho detalle; no debe usarse sola para enviar a cuarentena.
 def calculate_entropy(arr):
     """Calcula entropia de la imagen"""
     flat = arr.flatten()

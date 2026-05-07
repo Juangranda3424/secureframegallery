@@ -22,12 +22,12 @@ export function useAuth() {
             authService.setTokens(data.session.access_token, data.session.refresh_token);
             
             // Guardar datos del usuario
-            user.value = data.user.name;
-            localStorage.setItem('user', JSON.stringify(data.user.name));
+            user.value = data.user;
+            localStorage.setItem('user', JSON.stringify(data.user));
             
             return data;
         } catch (err) {
-            error.value = err.response?.data?.message || 'Error en el login';
+            error.value = err.response?.data?.detail || err.response?.data?.message || 'Error en el login';
             throw error.value;
         } finally {
             loading.value = false;
