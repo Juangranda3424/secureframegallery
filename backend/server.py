@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from routers.auth import router as auth_router
 from routers.album import router as album_router
 from routers.image import router as image_router
+from routers.notification import router as notification_router
 from starlette.middleware.base import BaseHTTPMiddleware
 from slowapi.middleware import SlowAPIMiddleware
 from services.rate_limit import limiter
@@ -30,6 +31,7 @@ app.add_middleware(
 app.include_router(auth_router, prefix="/api/v1/auth")
 app.include_router(album_router, prefix="/api/v1/albums")
 app.include_router(image_router, prefix="/api/v1/albums")
+app.include_router(notification_router, prefix="/api/v1/notifications")
 app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
 
 # Aquí podrías incluir otros routers para CRUD de imágenes, etc. Es una buena utilizar /api/v1/ para versionar tu API desde el principio.

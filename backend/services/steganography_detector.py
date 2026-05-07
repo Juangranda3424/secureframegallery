@@ -12,7 +12,7 @@ def detect_steganography(image_bytes: bytes) -> dict:
     lsb_analysis = analyze_lsb_pattern(arr)
 
     #Analisis de entropia
-    entropy = calculate_entropy(arr)
+    entropy = float(calculate_entropy(arr))
 
     eof_suspicious = has_trailing_data(image_bytes)
     lsb_balance_score = lsb_analysis["anomaly_score"]
@@ -31,11 +31,11 @@ def detect_steganography(image_bytes: bytes) -> dict:
 
     return {
         "is_suspicious": is_suspicious,
-        "confidence": max(lsb_balance_score, entropy / 8) if is_suspicious else min(max(lsb_balance_score, entropy / 8), 0.49),
+        "confidence": float(max(lsb_balance_score, entropy / 8) if is_suspicious else min(max(lsb_balance_score, entropy / 8), 0.49)),
         "reasons": suspicious_reasons,
         "details": {
-            "lsb_balance_score": lsb_balance_score,
-            "entropy": entropy,
+            "lsb_balance_score": float(lsb_balance_score),
+            "entropy": float(entropy),
             "eof_suspicious": eof_suspicious
         }
     }
@@ -70,7 +70,23 @@ def calculate_entropy(arr):
     return entropy
 
 def has_trailing_data(image_bytes: bytes) -> bool:
-    jpg_end = image_bytes.rfind(b"\xff\xd9")
-    if jpg_end != -1:
-        return len(image_bytes[jpg_end + 2:].strip()) > 0
+    if image_bytes.startswith(b"\xff\xd8"):
+        jpg_end = image_bytes.rfind(b"\xff\xd9")
+        if jpg_end != -1:
+            return len(image_bytes[jpg_end + 2:].strip()) > 0
+
+    if image_bytes.startswith(b"\x89PNG\r\n\x1a\n"):
+        png_end = image_bytes.rfind(b"IEND")
+        if png_end != -1:
+            return len(image_bytes[png_end + 8:].strip()) > 0
+
+    if image_bytes.startswith((b"GIF87a", b"GIF89a")):
+        gif_end = image_bytes.rfind(b"\x3b")
+        if gif_end != -1:
+            return len(image_bytes[gif_end + 1:].strip()) > 0
+
+    if image_bytes.startswith(b"RIFF") and image_bytes[8:12] == b"WEBP":
+        declared_size = int.from_bytes(image_bytes[4:8], "little") + 8
+        return len(image_bytes[declared_size:].strip()) > 0
+
     return False

@@ -1,6 +1,13 @@
 <template>
     <main class="gallery-page">
-        <GalleryHeader :loading="loading" @refresh="loadAlbums" />
+        <GalleryHeader
+            :loading="loading"
+            :unread-count="unreadCount"
+            :notifications-open="notificationsOpen"
+            :notifications="notifications"
+            @refresh="loadAlbums"
+            @toggle-notifications="toggleNotifications"
+        />
 
         <GallerySummary
             :total="albums.length"
@@ -9,8 +16,8 @@
         />
 
         <GalleryTabs
+            v-if="activeTab !== 'images'"
             :active-tab="activeTab"
-            :has-selected-album="!!selectedAlbum"
             @change="activeTab = $event"
         />
 
@@ -33,26 +40,42 @@
             :images="images"
             :api-url="apiUrl"
             :uploading="uploading"
-            :upload-result="uploadResult"
             :active-analysis-step="activeAnalysisStep"
             :analysis-steps="analysisSteps"
             @back="activeTab = 'albums'"
             @upload="uploadImage"
+            @delete-image="deleteImage"
+        />
+
+        <ConfirmModal
+            :visible="deleteConfirm.visible"
+            title="Eliminar imagen"
+            message="Esta imagen se eliminará del álbum y no podrá recuperarse desde la galería."
+            confirm-label="Eliminar"
+            loading-label="Eliminando imagen"
+            icon="pi pi-trash"
+            severity="danger"
+            :loading="deletingImage"
+            @cancel="closeDeleteConfirm"
+            @confirm="confirmDeleteImage"
         />
     </main>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { onBeforeRouteUpdate } from "vue-router";
 import albumService from "@/services/albumService.js";
 import imageService from "@/services/imageService.js";
+import notificationService from "@/services/notificationService.js";
 import GalleryHeader from "@/components/gallery/GalleryHeader.vue";
 import GallerySummary from "@/components/gallery/GallerySummary.vue";
 import GalleryTabs from "@/components/gallery/GalleryTabs.vue";
 import AlbumRequestForm from "@/components/gallery/AlbumRequestForm.vue";
 import AlbumList from "@/components/gallery/AlbumList.vue";
 import ImageUploadPanel from "@/components/gallery/ImageUploadPanel.vue";
+import ConfirmModal from "@/components/general/ConfirmModal.vue";
+import { useToastGlobal } from "@/helpers/utils.js";
 
 const apiUrl = import.meta.env.VITE_API_URL.replace("/api/v1","");
 const albums = ref([]);
@@ -61,8 +84,17 @@ const selectedAlbum = ref(null);
 const loading = ref(false);
 const activeTab = ref("albums");
 const uploading = ref(false);
+const deletingImage = ref(false);
 const activeAnalysisStep = ref("");
-const uploadResult = ref(null);
+const deleteConfirm = ref({
+    visible: false,
+    image: null,
+});
+const notifications = ref([]);
+const notificationsOpen = ref(false);
+const shownNotificationIds = new Set();
+let notificationInterval = null;
+const { msjShow } = useToastGlobal();
 const analysisSteps = [
     { key: "upload", label: "Recibiendo archivo" },
     { key: "metadata", label: "Limpiando metadatos EXIF" },
@@ -72,6 +104,7 @@ const analysisSteps = [
 
 const approvedCount = computed(() => albums.value.filter((album) => album.status === "approved").length);
 const pendingCount = computed(() => albums.value.filter((album) => (album.status || "pending") === "pending").length);
+const unreadCount = computed(() => notifications.value.filter((notification) => !notification.read).length);
 
 async function loadAlbums() {
     const { data } = await albumService.getAll();
@@ -103,7 +136,6 @@ async function selectAlbum(album) {
     selectedAlbum.value = album;
     activeTab.value = "images";
     images.value = [];
-    uploadResult.value = null;
     activeAnalysisStep.value = "";
 
     if (album.status === "approved") {
@@ -117,7 +149,6 @@ async function uploadImage(event) {
     if (!file || !selectedAlbum.value) return;
 
     uploading.value = true;
-    uploadResult.value = null;
     activeAnalysisStep.value = "upload";
 
     try {
@@ -132,37 +163,146 @@ async function uploadImage(event) {
 
         const { data } = await imageService.list(selectedAlbum.value.id);
         images.value = data;
-        uploadResult.value = buildUploadResult(uploadedImage);
+        notifyUploadResult(uploadedImage);
         event.target.value = "";
     } catch (error) {
-        uploadResult.value = {
-            status: "rejected",
-            message: error.response?.data?.detail || "No se pudo completar el analisis de la imagen."
-        };
+        const message = error.response?.data?.detail || "No se pudo completar el analisis de la imagen.";
+        msjShow("error", "Error al analizar", message, 4500);
     } finally {
         uploading.value = false;
+        activeAnalysisStep.value = "";
     }
 }
 
-function buildUploadResult(image) {
+async function deleteImage(image) {
+    deleteConfirm.value = {
+        visible: true,
+        image,
+    };
+}
+
+function closeDeleteConfirm(force = false) {
+    if (deletingImage.value && !force) return;
+
+    deleteConfirm.value = {
+        visible: false,
+        image: null,
+    };
+}
+
+async function confirmDeleteImage() {
+    if (!selectedAlbum.value || !deleteConfirm.value.image) return;
+
+    deletingImage.value = true;
+    try {
+        await imageService.remove(selectedAlbum.value.id, deleteConfirm.value.image.id);
+        images.value = images.value.filter((item) => item.id !== deleteConfirm.value.image.id);
+        msjShow("success", "Imagen eliminada", "La imagen fue eliminada del album.", 3000);
+        closeDeleteConfirm(true);
+    } finally {
+        deletingImage.value = false;
+    }
+}
+
+function notifyUploadResult(image) {
     if (image.status === "quarantined") {
-        return {
+        const result = {
             status: "quarantined",
             message: "La imagen fue marcada como sospechosa y quedo en cuarentena para revision del supervisor."
         };
+
+        msjShow(
+            "warn",
+            "Imagen enviada a revision",
+            result.message,
+            5200
+        );
+
+        return result;
     }
 
-    return {
+    const result = {
         status: "approved",
-        message: "La imagen paso la revision de esteganografia y fue aprobada."
+        message: "La imagen paso el analisis de seguridad y ya esta disponible en el album."
     };
+
+    msjShow(
+        "success",
+        "Imagen aprobada",
+        result.message,
+        4200
+    );
+
+    return result;
+}
+
+async function loadNotifications() {
+    const { data } = await notificationService.list();
+    notifications.value = data;
+}
+
+async function toggleNotifications() {
+    notificationsOpen.value = !notificationsOpen.value;
+    await loadNotifications();
+
+    if (notificationsOpen.value) {
+        const unread = notifications.value.filter((notification) => !notification.read);
+        await Promise.all(unread.map((notification) => notificationService.markRead(notification.id)));
+        notifications.value = notifications.value.map((notification) => ({
+            ...notification,
+            read: true,
+        }));
+    }
+}
+
+async function pollNotifications() {
+    try {
+        const { data } = await notificationService.unread();
+        if (!data.length) return;
+
+        await loadNotifications();
+
+        for (const notification of data) {
+            if (shownNotificationIds.has(notification.id)) continue;
+            shownNotificationIds.add(notification.id);
+
+            msjShow(
+                notification.type === "approved" ? "success" : notification.type === "rejected" ? "error" : "info",
+                notification.title,
+                notification.message,
+                6500
+            );
+        }
+
+        if (data.some((notification) => notification.type === "approved")) {
+            await loadAlbums();
+            if (selectedAlbum.value?.status === "approved") {
+                const { data: refreshedImages } = await imageService.list(selectedAlbum.value.id);
+                images.value = refreshedImages;
+            }
+        }
+    } catch (error) {
+        console.warn("No se pudieron consultar notificaciones", error);
+    }
 }
 
 function wait(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-onMounted(loadAlbums);
+onMounted(async () => {
+    await loadAlbums();
+    await loadNotifications();
+    await pollNotifications();
+    notificationInterval = window.setInterval(pollNotifications, 10000);
+});
+
+onUnmounted(() => {
+    if (notificationInterval) {
+        window.clearInterval(notificationInterval);
+    }
+});
+
 onBeforeRouteUpdate(async () => {
     await loadAlbums();
 });

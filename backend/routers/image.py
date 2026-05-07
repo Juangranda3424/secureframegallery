@@ -1,5 +1,8 @@
 from fastapi import APIRouter, HTTPException, Depends, File, UploadFile
 from pydantic import BaseModel
+from typing import Optional
+import json
+import re
 from routers.auth import get_current_user
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -7,6 +10,7 @@ from services.file_validator import validate_file
 from services.steganography_detector import detect_steganography
 from services.image_processor import strip_exif
 from services.rbac import require_role, Role
+from services.notifications import create_notification
 from config.db import supabase, supabase_admin
 
 router = APIRouter(tags=["images"])
@@ -21,10 +25,13 @@ class ImageInDB(ImageSchema):
     id: str
     album_id: str
     status: str
+    album_title: Optional[str] = None
+    album: Optional[dict] = None
+    image_analysis: Optional[list[dict]] = None
 
 @router.get("/{album_id}/images", response_model=list[ImageInDB])
 async def read_images(album_id: UUID, token: str = Depends(get_current_user)):
-    """Get all images"""
+    """Get approved images for the album owner."""
     album_resp = db.table("albums").select("*").eq("id", album_id).execute()
     if not album_resp.data:
         raise HTTPException(status_code=404, detail="Álbum no encontrado")
@@ -32,7 +39,13 @@ async def read_images(album_id: UUID, token: str = Depends(get_current_user)):
     
     if album.get("owner_id") != token.id:
         raise HTTPException(status_code=403, detail="No tienes permiso para ver las imágenes de este álbum")
-    response = db.table("images").select("*").eq("album_id", album_id).execute()
+    response = (
+        db.table("images")
+        .select("*")
+        .eq("album_id", album_id)
+        .eq("status", "approved")
+        .execute()
+    )
     return response.data
 
 @router.post("/{album_id}/images", response_model=ImageInDB)
@@ -55,13 +68,15 @@ async def upload_images(album_id: str, file: UploadFile = File(...), token: str 
     content = await file.read()
     validate_file(content, file.filename)
 
+    analysis = detect_steganography(content)
     clean_content = strip_exif(content)
-    analysis = detect_steganography(clean_content)
 
     uploads_dir = Path(__file__).resolve().parent.parent / "uploads"
     uploads_dir.mkdir(parents=True, exist_ok=True)
 
-    filename = f"{uuid4().hex}.jpg"
+    original_name = Path(file.filename or "imagen").name
+    safe_name = re.sub(r"[^A-Za-z0-9._-]+", "_", original_name).strip("._") or "imagen"
+    filename = f"{uuid4().hex}_{safe_name}"
     file_path = uploads_dir / filename
     file_path.write_bytes(clean_content)
 
@@ -82,7 +97,7 @@ async def upload_images(album_id: str, file: UploadFile = File(...), token: str 
     analysis_record = {
         "image_id": response.data[0]["id"],
         "analysis_type": "steganography",
-        "result": str(analysis),
+        "result": json.dumps(analysis, ensure_ascii=False, indent=2),
         "is_suspicious": analysis["is_suspicious"]
     }
     db.table("image_analysis").insert(analysis_record).execute()
@@ -100,9 +115,18 @@ async def delete_image(image_id: UUID, album_id: UUID, token: str = Depends(get_
     if album.get("owner_id") != token.id:
         raise HTTPException(status_code=403, detail="No tienes permiso para subir imágenes en este álbum")
 
+    image_resp = db.table("images").select("*").eq("id", image_id).eq("album_id", album_id).execute()
+    if not image_resp.data:
+        raise HTTPException(status_code=404, detail="Imagen no encontrada")
+
+    image = image_resp.data[0]
     response = db.table("images").delete().eq("id", image_id).eq("album_id", album_id).execute()
     if not response.data:
         raise HTTPException(status_code=404, detail="Imagen no encontrada")
+
+    upload_path = Path(__file__).resolve().parent.parent / image["file_path"].lstrip("/")
+    upload_path.unlink(missing_ok=True)
+
     return {"message": f"Imagen with ID {image_id} deleted"} 
 
 
@@ -110,16 +134,51 @@ async def delete_image(image_id: UUID, album_id: UUID, token: str = Depends(get_
 @router.get("/quarantine", response_model=list[ImageInDB])
 async def list_quarantine(token=Depends(require_role(Role.SUPERVISOR, Role.ADMIN))):
     """Ver imagenes en cuarentena"""
-    resp = db.table("images").select("*, image_analysis(*)").eq("status", "quarantined").execute()
-    return resp.data
+    resp = (
+        db.table("images")
+        .select("*, albums(id,title,description), image_analysis(*)")
+        .eq("status", "quarantined")
+        .execute()
+    )
+    images = resp.data or []
+    album_ids = list({str(image["album_id"]) for image in images if image.get("album_id")})
+
+    albums_by_id = {}
+    if album_ids:
+        albums_resp = db.table("albums").select("id,title,description").in_("id", album_ids).execute()
+        albums_by_id = {str(album["id"]): album for album in (albums_resp.data or [])}
+
+    for image in images:
+        album = image.get("albums") or albums_by_id.get(str(image.get("album_id")))
+        image["album"] = album
+        image["album_title"] = album.get("title") if album else "Album no encontrado"
+
+    return images
 
 @router.patch("/quarantine/{image_id}/approve")
 async def approve_image(image_id: UUID, token=Depends(require_role(Role.SUPERVISOR, Role.ADMIN))):
     """Supervisor aprueba la imagen de cuarentena"""
+    image_resp = db.table("images").select("*").eq("id", image_id).single().execute()
+    image = image_resp.data
+    if not image:
+        raise HTTPException(status_code=404, detail="Imagen no encontrada")
+
+    album_resp = db.table("albums").select("id,title,owner_id").eq("id", image["album_id"]).single().execute()
+    album = album_resp.data
+
     response = db.table("images").update({"status": "approved"}).eq("id", image_id).execute()
 
     if not response.data:
         raise HTTPException(status_code=404, detail="Imagen no encontrada")
+
+    if album:
+        image_name = Path(image["file_path"]).name
+        create_notification(
+            album["owner_id"],
+            "Imagen aprobada",
+            f"La imagen '{image_name}' del album '{album['title']}' fue aprobada por el supervisor.",
+            "approved",
+        )
 
     return {"message": f"Imagen {image_id} aprobada"}
 
@@ -127,10 +186,25 @@ async def approve_image(image_id: UUID, token=Depends(require_role(Role.SUPERVIS
 async def reject_quarantine_image(image_id: UUID, token=Depends(require_role(Role.SUPERVISOR, Role.ADMIN))):
     """Supervisor rechaza y borra imagen de cuarentena"""
     img = db.table("images").select("*").eq("id", image_id).single().execute().data
+    if not img:
+        raise HTTPException(status_code=404, detail="Imagen no encontrada")
 
-    Path(f"backend{img['file_path']}").unlink(missing_ok=True)
+    album_resp = db.table("albums").select("id,title,owner_id").eq("id", img["album_id"]).single().execute()
+    album = album_resp.data
+
+    upload_path = Path(__file__).resolve().parent.parent / img["file_path"].lstrip("/")
+    upload_path.unlink(missing_ok=True)
 
     db.table("images").delete().eq("id", image_id).execute()
+
+    if album:
+        image_name = Path(img["file_path"]).name
+        create_notification(
+            album["owner_id"],
+            "Imagen rechazada",
+            f"La imagen '{image_name}' del album '{album['title']}' fue rechazada y eliminada por el supervisor.",
+            "rejected",
+        )
 
     return {"message": f"IMagen {image_id} rechazada y eliminada"}
 

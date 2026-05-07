@@ -8,15 +8,6 @@
             <i class="pi pi-images"></i>
             Albumes
         </button>
-        <button
-            type="button"
-            :class="{ active: activeTab === 'images' }"
-            :disabled="!hasSelectedAlbum"
-            @click="$emit('change', 'images')"
-        >
-            <i class="pi pi-upload"></i>
-            Imagenes
-        </button>
     </nav>
 </template>
 
@@ -25,10 +16,6 @@ defineProps({
     activeTab: {
         type: String,
         required: true,
-    },
-    hasSelectedAlbum: {
-        type: Boolean,
-        default: false,
     },
 });
 

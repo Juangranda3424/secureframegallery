@@ -6,11 +6,16 @@
                 <h1>Supervisor</h1>
                 <p>Aprueba albumes y revisa imagenes retenidas por el analisis de seguridad.</p>
             </div>
-            <button class="primary-action" type="button" @click="loadData">
-                <i class="pi pi-refresh"></i>
-                Actualizar
+            <button class="primary-action" type="button" :disabled="isBusy" @click="loadData">
+                <i :class="isRefreshing ? 'pi pi-spin pi-spinner' : 'pi pi-refresh'"></i>
+                {{ isRefreshing ? "Actualizando" : "Actualizar" }}
             </button>
         </section>
+
+        <div v-if="actionMessage" class="action-status">
+            <i class="pi pi-spin pi-spinner"></i>
+            {{ actionMessage }}
+        </div>
 
         <section class="review-panel">
             <div class="panel-title">
@@ -23,13 +28,13 @@
                     <h3>{{ album.title }}</h3>
                     <p>{{ album.description || "Sin descripcion" }}</p>
                     <div class="review-actions">
-                        <button class="approve" @click="approveAlbum(album.id)">
-                            <i class="pi pi-check"></i>
-                            Aprobar
+                        <button class="approve" :disabled="isBusy" @click="approveAlbum(album.id)">
+                            <i :class="actionKey === `album-approve-${album.id}` ? 'pi pi-spin pi-spinner' : 'pi pi-check'"></i>
+                            {{ actionKey === `album-approve-${album.id}` ? "Aprobando" : "Aprobar" }}
                         </button>
-                        <button class="reject" @click="rejectAlbum(album.id)">
-                            <i class="pi pi-times"></i>
-                            Rechazar
+                        <button class="reject" :disabled="isBusy" @click="rejectAlbum(album.id)">
+                            <i :class="actionKey === `album-reject-${album.id}` ? 'pi pi-spin pi-spinner' : 'pi pi-times'"></i>
+                            {{ actionKey === `album-reject-${album.id}` ? "Rechazando" : "Rechazar" }}
                         </button>
                     </div>
                 </article>
@@ -46,15 +51,22 @@
             <div v-if="quarantineImages.length" class="review-grid image-review-grid">
                 <article v-for="image in quarantineImages" :key="image.id" class="review-card">
                     <img :src="apiUrl + image.file_path" alt="Imagen en cuarentena">
-                    <pre>{{ image.image_analysis }}</pre>
+                    <div class="quarantine-meta">
+                        <span>Album</span>
+                        <strong>{{ image.album_title || image.album?.title || "Album no encontrado" }}</strong>
+                    </div>
+                    <details class="analysis-details">
+                        <summary>Ver analisis</summary>
+                        <pre>{{ formatAnalysis(image.image_analysis) }}</pre>
+                    </details>
                     <div class="review-actions">
-                        <button class="approve" @click="approveImage(image.id)">
-                            <i class="pi pi-check"></i>
-                            Aprobar
+                        <button class="approve" :disabled="isBusy" @click="approveImage(image.id)">
+                            <i :class="actionKey === `image-approve-${image.id}` ? 'pi pi-spin pi-spinner' : 'pi pi-check'"></i>
+                            {{ actionKey === `image-approve-${image.id}` ? "Aprobando" : "Aprobar" }}
                         </button>
-                        <button class="reject" @click="rejectImage(image.id)">
-                            <i class="pi pi-trash"></i>
-                            Rechazar
+                        <button class="reject" :disabled="isBusy" @click="rejectImage(image.id)">
+                            <i :class="actionKey === `image-reject-${image.id}` ? 'pi pi-spin pi-spinner' : 'pi pi-trash'"></i>
+                            {{ actionKey === `image-reject-${image.id}` ? "Rechazando" : "Rechazar" }}
                         </button>
                     </div>
                 </article>
@@ -66,40 +78,76 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import albumService from "@/services/albumService.js";
 import imageService from "@/services/imageService.js";
 
 const apiUrl = import.meta.env.VITE_API_URL.replace("/api/v1","");
 const pendingAlbums = ref([]);
 const quarantineImages = ref([]);
+const actionKey = ref("");
+const actionMessage = ref("");
+const isRefreshing = ref(false);
+
+const isBusy = computed(() => !!actionKey.value || isRefreshing.value);
 
 async function loadData() {
-    const albumsResp = await albumService.getPending();
-    pendingAlbums.value = albumsResp.data;
+    isRefreshing.value = true;
+    try {
+        const albumsResp = await albumService.getPending();
+        pendingAlbums.value = albumsResp.data;
 
-    const quarantineResp = await imageService.listQuarantine();
-    quarantineImages.value = quarantineResp.data;
+        const quarantineResp = await imageService.listQuarantine();
+        quarantineImages.value = quarantineResp.data;
+    } finally {
+        isRefreshing.value = false;
+    }
 }
 
 async function approveAlbum(albumId) {
-    await albumService.approve(albumId);
-    await loadData();
+    await runReviewAction(`album-approve-${albumId}`, "Aprobando album", async () => {
+        await albumService.approve(albumId);
+    });
 }
 
 async function rejectAlbum(albumId) {
-    await albumService.reject(albumId);
-    await loadData();
+    await runReviewAction(`album-reject-${albumId}`, "Rechazando album", async () => {
+        await albumService.reject(albumId);
+    });
 }
 
 async function approveImage(imageId) {
-    await imageService.approve(imageId);
-    await loadData();
+    await runReviewAction(`image-approve-${imageId}`, "Aprobando imagen en cuarentena", async () => {
+        await imageService.approve(imageId);
+    });
 }
 
 async function rejectImage(imageId) {
-    await imageService.rejectQuarantine(imageId);
-    await loadData();
+    await runReviewAction(`image-reject-${imageId}`, "Rechazando y eliminando imagen", async () => {
+        await imageService.rejectQuarantine(imageId);
+    });
+}
+
+async function runReviewAction(key, message, action) {
+    actionKey.value = key;
+    actionMessage.value = message;
+    try {
+        await action();
+        await loadData();
+    } finally {
+        actionKey.value = "";
+        actionMessage.value = "";
+    }
+}
+
+function formatAnalysis(analysis) {
+    if (!analysis?.length) {
+        return "No hay registro de analisis para esta imagen.";
+    }
+
+    return analysis
+        .map((item) => item.result || JSON.stringify(item, null, 2))
+        .join("\n\n");
 }
 
 onMounted(loadData);
@@ -153,7 +201,50 @@ onMounted(loadData);
   color: #fff;
   font-weight: 800;
   cursor: pointer;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
+
+.primary-action:disabled {
+  opacity: 0.72;
+  cursor: wait;
+}
+
+.primary-action:hover {
+  background: #111d6b;
+  box-shadow: 0 10px 20px rgba(9, 19, 80, 0.18);
+  transform: translateY(-1px);
+}
+
+.primary-action:disabled:hover {
+  box-shadow: none;
+  transform: none;
+}
+
+.action-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+  padding: 12px 14px;
+  border: 1px solid #b8c0ea;
+  border-radius: 8px;
+  background: #f8faff;
+  color: #091350;
+  font-weight: 800;
+  animation: status-in 0.18s ease;
+}
+
+@keyframes status-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 
 .review-panel {
   width: 100%;
@@ -194,6 +285,13 @@ onMounted(loadData);
   border: 1px solid #e4e7ec;
   border-radius: 8px;
   background: #fff;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.review-card:hover {
+  border-color: #b8c0ea;
+  box-shadow: 0 12px 26px rgba(16, 24, 40, 0.08);
+  transform: translateY(-1px);
 }
 
 .review-card h3 {
@@ -223,6 +321,36 @@ onMounted(loadData);
   white-space: pre-wrap;
 }
 
+.quarantine-meta {
+  display: grid;
+  gap: 4px;
+  margin: 12px 0;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: #f8faff;
+}
+
+.quarantine-meta span {
+  color: #667085;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.quarantine-meta strong {
+  color: #091350;
+}
+
+.analysis-details {
+  margin-bottom: 12px;
+}
+
+.analysis-details summary {
+  color: #091350;
+  font-weight: 800;
+  cursor: pointer;
+}
+
 .review-actions {
   display: flex;
   gap: 8px;
@@ -240,6 +368,29 @@ onMounted(loadData);
   color: #fff;
   font-weight: 800;
   cursor: pointer;
+  transition: filter 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.review-actions button:hover {
+  filter: brightness(1.06);
+  box-shadow: 0 8px 18px rgba(16, 24, 40, 0.14);
+  transform: translateY(-1px);
+}
+
+.review-actions button:disabled {
+  opacity: 0.72;
+  cursor: wait;
+}
+
+.review-actions button:disabled:hover {
+  box-shadow: none;
+  filter: none;
+  transform: none;
+}
+
+.review-actions button:active,
+.primary-action:active {
+  transform: translateY(0);
 }
 
 .approve {
