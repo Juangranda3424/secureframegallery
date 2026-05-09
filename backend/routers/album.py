@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from routers.auth import get_current_user
 from services.rbac import require_role, Role
 from services.sanitizer import sanitize_text_input
+from services.notifications import create_notification
 from config.db import supabase, supabase_admin
 
 router = APIRouter(tags=["albums"])
@@ -23,14 +24,26 @@ class AlbumInDB(AlbumSchema):
 
 @router.get("/public")
 async def read_public_albums():
-    response = db.table("albums").select("*").eq("status", "approved").execute()
+    response = (
+        db.table("albums")
+        .select("*")
+        .eq("status", "approved")
+        .eq("initial_priv", False)
+        .execute()
+    )
     return response.data
 
 @router.get("", response_model=list[AlbumInDB])
 async def read_albums(token: str = Depends(get_current_user)):
     """Get all products"""
     try:
-        response = db.table("albums").select("*").eq("owner_id", token.id).execute()
+        response = (
+            db.table("albums")
+            .select("*")
+            .eq("owner_id", token.id)
+            .neq("status", "rejected")
+            .execute()
+        )
         return response.data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -79,17 +92,42 @@ def delete_album(album_id: str, token: str = Depends(get_current_user)):
 @router.patch("/{album_id}/approve")
 async def approve_album(album_id: str, token=Depends(require_role(Role.SUPERVISOR, Role.ADMIN))):
     """Supervisor aprueba album pendiente"""
+    album_resp = db.table("albums").select("id,title,owner_id").eq("id", album_id).execute()
+    if not album_resp.data:
+        raise HTTPException(status_code=404, detail="Album no encontrado")
+
+    album = album_resp.data[0]
     response = db.table("albums").update({"status": "approved"}).eq("id", album_id).execute()
     
     if not response.data:
         raise HTTPException(status_code=404, detail="Album no encontrado")
+
+    create_notification(
+        album["owner_id"],
+        "Album aprobado",
+        f"Tu album '{album['title']}' fue aprobado por el supervisor. Ya puedes subir imagenes.",
+        "approved",
+    )
     
     return {"message": f"Album {album_id} aprobado"}
 
 @router.patch("/{album_id}/reject")
 async def reject_album(album_id: str, token=Depends(require_role(Role.SUPERVISOR, Role.ADMIN))):
     """Supervisor rechaza album"""
+    album_resp = db.table("albums").select("id,title,owner_id").eq("id", album_id).execute()
+    if not album_resp.data:
+        raise HTTPException(status_code=404, detail="Album no encontrado")
+
+    album = album_resp.data[0]
     response = db.table("albums").update({"status": "rejected"}).eq("id", album_id).execute()
     if not response.data:
         raise HTTPException(status_code=404, detail="Album no encontrado")
+
+    create_notification(
+        album["owner_id"],
+        "Album rechazado",
+        f"Tu album '{album['title']}' fue rechazado por el supervisor y ya no aparecera en tu galeria.",
+        "rejected",
+    )
+
     return {"message": f"Album {album_id} rechazado"}

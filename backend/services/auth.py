@@ -42,6 +42,6 @@ async def login(username: str, password: str):
         # Si quieres ver el error real en consola mientras programas:
         print(f"Error en login: {e}")
         raise HTTPException(
-            status_code=400, 
-            detail="Credenciales inválidas o error al obtener el perfil"
+            status_code=401,
+            detail="Credenciales invalidas"
         )

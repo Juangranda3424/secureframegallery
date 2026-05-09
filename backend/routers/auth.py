@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from services.auth import login as auth_login
 from config.db import supabase, supabase_admin
 from services.rate_limit import limiter
+from services.sanitizer import sanitize_text_input
 import re
 
 
@@ -50,23 +51,32 @@ def validate_password(password: str):
         raise HTTPException(status_code=400, detail="La contrasena debe incluir un simbolo")
 
 @router.post("/register")
-async def register(data: RegisterSchema):
+@limiter.limit("3/minute")
+async def register(request: Request, data: RegisterSchema):
+    email = data.email.strip().lower()
+    name = sanitize_text_input(data.name.strip(), 100)
+
+    if not re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", email):
+        raise HTTPException(status_code=400, detail="Datos de registro invalidos")
+    if not name:
+        raise HTTPException(status_code=400, detail="Datos de registro invalidos")
+
     validate_password(data.password)
 
     try:
         if supabase_admin:
             auth_response = supabase_admin.auth.admin.create_user({
-                "email": data.email,
+                "email": email,
                 "password": data.password,
                 "email_confirm": True,
-                "user_metadata": {"name": data.name},
+                "user_metadata": {"name": name},
             })
         else:
             auth_response = supabase.auth.sign_up({
-                "email": data.email,
+                "email": email,
                 "password": data.password,
                 "options": {
-                    "data": {"name": data.name}
+                    "data": {"name": name}
                 }
             })
 
@@ -78,7 +88,7 @@ async def register(data: RegisterSchema):
         db = supabase_admin or supabase
         db.table("profiles").upsert({
             "id": user_id,
-            "name": data.name,
+            "name": name,
             "role": "user"
         }).execute()
 
@@ -97,7 +107,7 @@ async def register(data: RegisterSchema):
                     "en backend/.env para registrar usuarios confirmados desde el backend."
                 )
             )
-        raise HTTPException(status_code=400, detail=f"Error al registrar el usuario: {e}")
+        raise HTTPException(status_code=400, detail="No se pudo completar el registro")
 
 
 @router.post("/login")

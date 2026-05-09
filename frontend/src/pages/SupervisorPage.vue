@@ -6,16 +6,7 @@
                 <h1>Supervisor</h1>
                 <p>Aprueba albumes y revisa imagenes retenidas por el analisis de seguridad.</p>
             </div>
-            <button class="primary-action" type="button" :disabled="isBusy" @click="loadData">
-                <i :class="isRefreshing ? 'pi pi-spin pi-spinner' : 'pi pi-refresh'"></i>
-                {{ isRefreshing ? "Actualizando" : "Actualizar" }}
-            </button>
         </section>
-
-        <div v-if="actionMessage" class="action-status">
-            <i class="pi pi-spin pi-spinner"></i>
-            {{ actionMessage }}
-        </div>
 
         <section class="review-panel">
             <div class="panel-title">
@@ -50,7 +41,12 @@
 
             <div v-if="quarantineImages.length" class="review-grid image-review-grid">
                 <article v-for="image in quarantineImages" :key="image.id" class="review-card">
-                    <img :src="apiUrl + image.file_path" alt="Imagen en cuarentena">
+                    <img
+                        :src="apiUrl + image.file_path"
+                        alt="Imagen en cuarentena"
+                        class="quarantine-image"
+                        @click="openImage(image)"
+                    >
                     <div class="quarantine-meta">
                         <span>Album</span>
                         <strong>{{ image.album_title || image.album?.title || "Album no encontrado" }}</strong>
@@ -74,6 +70,14 @@
             <p v-else class="empty-state">No hay imagenes en cuarentena.</p>
         </section>
 
+        <div v-if="previewImage" class="image-preview-backdrop" @click.self="closeImage">
+            <section class="image-preview" role="dialog" aria-modal="true" aria-label="Imagen en cuarentena completa">
+                <button class="close-preview" type="button" aria-label="Cerrar imagen" @click="closeImage">
+                    <i class="pi pi-times"></i>
+                </button>
+                <img :src="apiUrl + previewImage.file_path" alt="Imagen en cuarentena completa">
+            </section>
+        </div>
     </main>
 </template>
 
@@ -86,57 +90,50 @@ const apiUrl = import.meta.env.VITE_API_URL.replace("/api/v1","");
 const pendingAlbums = ref([]);
 const quarantineImages = ref([]);
 const actionKey = ref("");
-const actionMessage = ref("");
-const isRefreshing = ref(false);
+const previewImage = ref(null);
 
-const isBusy = computed(() => !!actionKey.value || isRefreshing.value);
+const isBusy = computed(() => !!actionKey.value);
 
 async function loadData() {
-    isRefreshing.value = true;
-    try {
-        const albumsResp = await albumService.getPending();
-        pendingAlbums.value = albumsResp.data;
+    const albumsResp = await albumService.getPending();
+    pendingAlbums.value = albumsResp.data;
 
-        const quarantineResp = await imageService.listQuarantine();
-        quarantineImages.value = quarantineResp.data;
-    } finally {
-        isRefreshing.value = false;
-    }
+    const quarantineResp = await imageService.listQuarantine();
+    quarantineImages.value = quarantineResp.data;
 }
 
 async function approveAlbum(albumId) {
-    await runReviewAction(`album-approve-${albumId}`, "Aprobando album", async () => {
+    await runReviewAction(`album-approve-${albumId}`, async () => {
         await albumService.approve(albumId);
     });
 }
 
 async function rejectAlbum(albumId) {
-    await runReviewAction(`album-reject-${albumId}`, "Rechazando album", async () => {
+    await runReviewAction(`album-reject-${albumId}`, async () => {
         await albumService.reject(albumId);
     });
 }
 
 async function approveImage(imageId) {
-    await runReviewAction(`image-approve-${imageId}`, "Aprobando imagen en cuarentena", async () => {
+    await runReviewAction(`image-approve-${imageId}`, async () => {
         await imageService.approve(imageId);
     });
 }
 
 async function rejectImage(imageId) {
-    await runReviewAction(`image-reject-${imageId}`, "Rechazando y eliminando imagen", async () => {
+    await runReviewAction(`image-reject-${imageId}`, async () => {
         await imageService.rejectQuarantine(imageId);
     });
+    closeImage();
 }
 
-async function runReviewAction(key, message, action) {
+async function runReviewAction(key, action) {
     actionKey.value = key;
-    actionMessage.value = message;
     try {
         await action();
         await loadData();
     } finally {
         actionKey.value = "";
-        actionMessage.value = "";
     }
 }
 
@@ -148,6 +145,14 @@ function formatAnalysis(analysis) {
     return analysis
         .map((item) => item.result || JSON.stringify(item, null, 2))
         .join("\n\n");
+}
+
+function openImage(image) {
+    previewImage.value = image;
+}
+
+function closeImage() {
+    previewImage.value = null;
 }
 
 onMounted(loadData);
@@ -189,63 +194,6 @@ onMounted(loadData);
   color: #667085;
 }
 
-.primary-action {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 40px;
-  padding: 10px 16px;
-  border: 0;
-  border-radius: 6px;
-  background: #091350;
-  color: #fff;
-  font-weight: 800;
-  cursor: pointer;
-  transition: background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
-}
-
-.primary-action:disabled {
-  opacity: 0.72;
-  cursor: wait;
-}
-
-.primary-action:hover {
-  background: #111d6b;
-  box-shadow: 0 10px 20px rgba(9, 19, 80, 0.18);
-  transform: translateY(-1px);
-}
-
-.primary-action:disabled:hover {
-  box-shadow: none;
-  transform: none;
-}
-
-.action-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 18px;
-  padding: 12px 14px;
-  border: 1px solid #b8c0ea;
-  border-radius: 8px;
-  background: #f8faff;
-  color: #091350;
-  font-weight: 800;
-  animation: status-in 0.18s ease;
-}
-
-@keyframes status-in {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-
 .review-panel {
   width: 100%;
   margin-bottom: 20px;
@@ -276,11 +224,12 @@ onMounted(loadData);
 
 .review-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
   gap: 16px;
 }
 
 .review-card {
+  min-width: 0;
   padding: 16px;
   border: 1px solid #e4e7ec;
   border-radius: 8px;
@@ -296,11 +245,15 @@ onMounted(loadData);
 
 .review-card h3 {
   margin: 0 0 8px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .review-card p {
   margin: 0 0 16px;
   color: #667085;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .review-card img {
@@ -309,6 +262,10 @@ onMounted(loadData);
   object-fit: cover;
   border-radius: 8px;
   border: 1px solid #e4e7ec;
+}
+
+.quarantine-image {
+  cursor: zoom-in;
 }
 
 .review-card pre {
@@ -339,6 +296,8 @@ onMounted(loadData);
 
 .quarantine-meta strong {
   color: #091350;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .analysis-details {
@@ -352,7 +311,8 @@ onMounted(loadData);
 }
 
 .review-actions {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
   gap: 8px;
 }
 
@@ -361,14 +321,21 @@ onMounted(loadData);
   align-items: center;
   justify-content: center;
   gap: 7px;
+  min-width: 0;
   min-height: 36px;
   padding: 8px 12px;
   border: 0;
   border-radius: 6px;
   color: #fff;
   font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
   cursor: pointer;
   transition: filter 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.review-actions button i {
+  flex: 0 0 auto;
 }
 
 .review-actions button:hover {
@@ -388,8 +355,7 @@ onMounted(loadData);
   transform: none;
 }
 
-.review-actions button:active,
-.primary-action:active {
+.review-actions button:active {
   transform: translateY(0);
 }
 
@@ -408,5 +374,47 @@ onMounted(loadData);
   border-radius: 8px;
   background: #f9fafb;
   color: #667085;
+}
+
+.image-preview-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background: rgba(9, 19, 80, 0.78);
+}
+
+.image-preview {
+  position: relative;
+  display: grid;
+  max-width: min(1120px, 100%);
+  max-height: 92vh;
+}
+
+.image-preview img {
+  display: block;
+  max-width: 100%;
+  max-height: 92vh;
+  border-radius: 8px;
+  background: #fff;
+  object-fit: contain;
+}
+
+.close-preview {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  color: #091350;
+  cursor: pointer;
 }
 </style>

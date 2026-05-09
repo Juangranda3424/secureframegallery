@@ -15,7 +15,12 @@
             >
                 <div class="album-card-head">
                     <i class="pi pi-folder"></i>
-                    <span class="status-pill" :class="album.status || 'pending'">{{ album.status || "pending" }}</span>
+                    <div class="album-badges">
+                        <span class="privacy-pill" :class="{ private: album.initial_priv }">
+                            {{ album.initial_priv ? "privado" : "publico" }}
+                        </span>
+                        <span class="status-pill" :class="album.status || 'pending'">{{ album.status || "pending" }}</span>
+                    </div>
                 </div>
                 <h3>{{ album.title }}</h3>
                 <p>{{ album.description || "Sin descripcion" }}</p>
@@ -93,6 +98,13 @@ defineEmits(["select"]);
   font-size: 1.2rem;
 }
 
+.album-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
 .album-card h3 {
   margin: 0 0 10px;
   font-size: 1.05rem;
@@ -111,16 +123,30 @@ defineEmits(["select"]);
   transform: translateY(-1px);
 }
 
+.privacy-pill,
 .status-pill {
   display: inline-flex;
   align-items: center;
   min-height: 24px;
   padding: 3px 9px;
   border-radius: 999px;
-  background: #fff4e5;
-  color: #b54708;
   font-size: 0.8rem;
   font-weight: 800;
+}
+
+.privacy-pill {
+  background: #eef2ff;
+  color: #091350;
+}
+
+.privacy-pill.private {
+  background: #f2f4f7;
+  color: #475467;
+}
+
+.status-pill {
+  background: #fff4e5;
+  color: #b54708;
 }
 
 .status-pill.approved {

@@ -53,7 +53,7 @@
             </div>
             <div class="image-grid">
                 <figure v-for="image in images" :key="image.id" class="image-card">
-                    <img :src="apiUrl + image.file_path" :alt="album.title">
+                    <img :src="apiUrl + image.file_path" :alt="album.title" @click="openImage(image)">
                     <button class="delete-image-action" type="button" @click="$emit('delete-image', image)">
                         <i class="pi pi-trash"></i>
                         Eliminar
@@ -66,10 +66,21 @@
             </div>
         </div>
         <p v-else-if="album.status === 'approved'" class="empty-state">Aun no hay imagenes aprobadas para este album.</p>
+
+        <div v-if="previewImage" class="image-preview-backdrop" @click.self="closeImage">
+            <section class="image-preview" role="dialog" aria-modal="true" aria-label="Imagen completa">
+                <button class="close-preview" type="button" aria-label="Cerrar imagen" @click="closeImage">
+                    <i class="pi pi-times"></i>
+                </button>
+                <img :src="apiUrl + previewImage.file_path" :alt="album.title">
+            </section>
+        </div>
     </section>
 </template>
 
 <script setup>
+import { ref } from "vue";
+
 const props = defineProps({
     album: {
         type: Object,
@@ -98,6 +109,15 @@ const props = defineProps({
 });
 
 defineEmits(["back", "upload", "delete-image"]);
+const previewImage = ref(null);
+
+function openImage(image) {
+    previewImage.value = image;
+}
+
+function closeImage() {
+    previewImage.value = null;
+}
 
 function stepState(key) {
     const currentIndex = props.analysisSteps.findIndex((step) => step.key === props.activeAnalysisStep);
@@ -390,6 +410,7 @@ function stepIcon(key) {
   width: 100%;
   aspect-ratio: 1;
   object-fit: cover;
+  cursor: zoom-in;
 }
 
 .image-card figcaption {
@@ -438,6 +459,48 @@ function stepIcon(key) {
   border-radius: 8px;
   background: #f9fafb;
   color: #667085;
+}
+
+.image-preview-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background: rgba(9, 19, 80, 0.78);
+}
+
+.image-preview {
+  position: relative;
+  display: grid;
+  max-width: min(1120px, 100%);
+  max-height: 92vh;
+}
+
+.image-preview img {
+  display: block;
+  max-width: 100%;
+  max-height: 92vh;
+  border-radius: 8px;
+  background: #fff;
+  object-fit: contain;
+}
+
+.close-preview {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  color: #091350;
+  cursor: pointer;
 }
 
 @media (max-width: 900px) {

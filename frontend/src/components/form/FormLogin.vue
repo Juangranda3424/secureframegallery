@@ -8,11 +8,28 @@
             </div>
         </template>
         <template #content>
+            <div class="auth-mode">
+                <button type="button" :class="{ active: mode === 'login' }" @click="setMode('login')">
+                    Iniciar sesion
+                </button>
+                <button type="button" :class="{ active: mode === 'register' }" @click="setMode('register')">
+                    Registrarse
+                </button>
+            </div>
+            <div v-if="mode === 'register'" class="container-login-card">
+                <IftaLabel class="login-div">
+                    <IconField>
+                        <InputIcon class="pi pi-user" />
+                        <InputText id="nameuser" v-model="name" class="components-login" @keypress.enter="submitAuth()" :disabled="isLoading"/>
+                    </IconField>
+                    <label for="nameuser">Nombre</label>
+                </IftaLabel>
+            </div>
             <div class="container-login-card">
                 <IftaLabel class="login-div">
                     <IconField>
                         <InputIcon class="pi pi-envelope" />
-                        <InputText id="emailuser" v-model="email" type="email" class="components-login" @keypress.enter="login()" :disabled="isLoading"/>
+                        <InputText id="emailuser" v-model="email" type="email" class="components-login" @keypress.enter="submitAuth()" :disabled="isLoading"/>
                     </IconField>
                     <label for="emailuser">Correo electrónico</label>
                 </IftaLabel>
@@ -21,13 +38,36 @@
                 <IftaLabel class="login-div">
                     <IconField>
                         <InputIcon class="pi pi-lock" />
-                        <Password id="password" v-model="password" toggleMask :feedback="false" class="components-login" @keypress.enter="login()" :disabled="isLoading"/>
+                        <Password
+                            id="password"
+                            v-model="password"
+                            toggleMask
+                            :feedback="mode === 'register'"
+                            class="components-login"
+                            @keypress.enter="submitAuth()"
+                            :disabled="isLoading"
+                        />
                     </IconField>
                     <label for="password">Contraseña</label>
                 </IftaLabel>
             </div>
+            <div v-if="mode === 'register'" class="password-rules">
+                <span :class="{ ok: passwordChecks.length }">12 caracteres</span>
+                <span :class="{ ok: passwordChecks.upper }">Mayuscula</span>
+                <span :class="{ ok: passwordChecks.lower }">Minuscula</span>
+                <span :class="{ ok: passwordChecks.number }">Numero</span>
+                <span :class="{ ok: passwordChecks.symbol }">Simbolo</span>
+            </div>
             <div class="container-login-card">
-                <Button label="INICIAR SESIÓN" icon="pi pi-sign-in" class="boton" severity="danger" @click="login()" :loading="isLoading" :disabled="isLoading"/>
+                <Button
+                    :label="mode === 'login' ? 'INICIAR SESION' : 'CREAR CUENTA'"
+                    :icon="mode === 'login' ? 'pi pi-sign-in' : 'pi pi-user-plus'"
+                    class="boton"
+                    severity="danger"
+                    @click="submitAuth()"
+                    :loading="isLoading"
+                    :disabled="isLoading"
+                />
             </div>
         </template>
     </Card>
@@ -57,18 +97,44 @@ import ProgressSpinner from 'primevue/progressspinner';
 import Card from 'primevue/card';
 import Toast from 'primevue/toast';
 import { useAuth } from '@/helpers/useAuth.js';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useToastGlobal } from '@/helpers/utils.js';
 
 
 const router = useRouter();
-const { login: authLogin } = useAuth();
+const { login: authLogin, register: authRegister } = useAuth();
 const { msjShow } = useToastGlobal();
 
+const mode = ref('login');
+const name = ref('');
 const email = ref('');
 const password = ref('');
 const isLoading = ref(false);
+
+const passwordChecks = computed(() => ({
+    length: password.value.length >= 12,
+    upper: /[A-Z]/.test(password.value),
+    lower: /[a-z]/.test(password.value),
+    number: /[0-9]/.test(password.value),
+    symbol: /[^A-Za-z0-9]/.test(password.value),
+}));
+
+const passwordIsStrong = computed(() => Object.values(passwordChecks.value).every(Boolean));
+
+const setMode = (nextMode) => {
+    mode.value = nextMode;
+    password.value = '';
+};
+
+const submitAuth = async () => {
+    if (mode.value === 'register') {
+        await register();
+        return;
+    }
+
+    await login();
+};
 
 const login = async () => {
 
@@ -98,7 +164,42 @@ const login = async () => {
         
     } catch (error) {
         // 4. Capturamos errores 
-        msjShow('error', 'Error al iniciar sesión', error || 'Credenciales incorrectas', 4000);
+        msjShow('error', 'Error al iniciar sesión', 'Credenciales invalidas', 4000);
+    } finally {
+        isLoading.value = false;
+    }
+};
+
+const register = async () => {
+    const normalizedName = name.value.trim();
+    const normalizedEmail = email.value.trim().toLowerCase();
+
+    if (!normalizedName || !normalizedEmail || !password.value.trim()) {
+        msjShow('error', 'Campos requeridos', 'Por favor complete todos los campos', 3000);
+        return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+        msjShow('error', 'Correo inválido', 'Ingrese el correo electrónico completo', 3000);
+        return;
+    }
+
+    if (!passwordIsStrong.value) {
+        msjShow('error', 'Contraseña débil', 'Use una contraseña de al menos 12 caracteres con mayúscula, minúscula, número y símbolo.', 4500);
+        return;
+    }
+
+    isLoading.value = true;
+
+    try {
+        await authRegister(normalizedName, normalizedEmail, password.value);
+        msjShow('success', 'Cuenta creada', 'Ahora puedes iniciar sesion con tus credenciales.', 3500);
+        mode.value = 'login';
+        name.value = '';
+        email.value = normalizedEmail;
+        password.value = '';
+    } catch (error) {
+        msjShow('error', 'No se pudo registrar', error || 'No se pudo completar el registro', 4000);
     } finally {
         isLoading.value = false;
     }
@@ -116,6 +217,55 @@ const login = async () => {
 .container-login {
     width: 100%;
     max-width: 25rem;
+}
+
+.auth-mode {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    width: 90%;
+    margin: 0 auto 1rem;
+    padding: 5px;
+    border: 1px solid #e4e7ec;
+    border-radius: 8px;
+    background: #f9fafb;
+}
+
+.auth-mode button {
+    min-height: 36px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #475467;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.auth-mode button.active {
+    background: #091350;
+    color: #fff;
+}
+
+.password-rules {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    width: 90%;
+    margin: -0.5rem auto 1rem;
+}
+
+.password-rules span {
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: #f2f4f7;
+    color: #667085;
+    font-size: 0.76rem;
+    font-weight: 800;
+}
+
+.password-rules span.ok {
+    background: #e7f6ec;
+    color: #157347;
 }
 
 .loading-overlay {

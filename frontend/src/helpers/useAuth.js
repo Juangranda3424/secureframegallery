@@ -35,6 +35,23 @@ export function useAuth() {
     }
 
     /**
+     * Registro de usuario
+     */
+    async function register(name, email, password) {
+        loading.value = true;
+        error.value = null;
+        try {
+            const { data } = await authService.register({ name, email, password });
+            return data;
+        } catch (err) {
+            error.value = err.response?.data?.detail || err.response?.data?.message || 'No se pudo completar el registro';
+            throw error.value;
+        } finally {
+            loading.value = false;
+        }
+    }
+
+    /**
      * Logout del usuario
      */
     async function logout() {
@@ -71,6 +88,7 @@ export function useAuth() {
         
         // Métodos
         login,
+        register,
         logout,
         loadUserFromStorage,
         

@@ -213,7 +213,14 @@ async def reject_quarantine_image(image_id: UUID, token=Depends(require_role(Rol
 async def get_public_images(album_id: UUID):
     """Visitantes ven solo imagenes aprobadas de albumes aprobados"""
 
-    album = db.table("albums").select("*").eq("id", album_id).eq("status", "approved").execute()
+    album = (
+        db.table("albums")
+        .select("*")
+        .eq("id", album_id)
+        .eq("status", "approved")
+        .eq("initial_priv", False)
+        .execute()
+    )
     if not album.data:
         raise HTTPException(status_code=404, detail="Álbum no disponible")
 

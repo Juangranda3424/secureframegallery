@@ -1,12 +1,11 @@
 <template>
     <main class="gallery-page">
         <GalleryHeader
-            :loading="loading"
             :unread-count="unreadCount"
             :notifications-open="notificationsOpen"
             :notifications="notifications"
-            @refresh="loadAlbums"
             @toggle-notifications="toggleNotifications"
+            @close-notifications="closeNotifications"
         />
 
         <GallerySummary
@@ -108,11 +107,16 @@ const unreadCount = computed(() => notifications.value.filter((notification) => 
 
 async function loadAlbums() {
     const { data } = await albumService.getAll();
-    albums.value = data;
+    albums.value = data.filter((album) => album.status !== "rejected");
 
     if (selectedAlbum.value) {
-        const freshAlbum = data.find((album) => album.id === selectedAlbum.value.id);
+        const freshAlbum = albums.value.find((album) => album.id === selectedAlbum.value.id);
         selectedAlbum.value = freshAlbum || null;
+
+        if (!freshAlbum) {
+            images.value = [];
+            activeTab.value = "albums";
+        }
     }
 }
 
@@ -122,7 +126,7 @@ async function createAlbum(album) {
         await albumService.create({
             title: album.title,
             description: album.description,
-            initial_priv: true
+            initial_priv: album.initial_priv
         });
 
         await loadAlbums();
@@ -255,6 +259,10 @@ async function toggleNotifications() {
     }
 }
 
+function closeNotifications() {
+    notificationsOpen.value = false;
+}
+
 async function pollNotifications() {
     try {
         const { data } = await notificationService.unread();
@@ -274,7 +282,7 @@ async function pollNotifications() {
             );
         }
 
-        if (data.some((notification) => notification.type === "approved")) {
+        if (data.some((notification) => ["approved", "rejected"].includes(notification.type))) {
             await loadAlbums();
             if (selectedAlbum.value?.status === "approved") {
                 const { data: refreshedImages } = await imageService.list(selectedAlbum.value.id);

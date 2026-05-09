@@ -50,6 +50,7 @@ function iconFor(type) {
   right: 0;
   z-index: 50;
   width: min(420px, calc(100vw - 36px));
+  max-width: calc(100vw - 36px);
   max-height: 460px;
   overflow: auto;
   padding: 18px;
@@ -100,10 +101,15 @@ function iconFor(type) {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 12px;
+  min-width: 0;
   padding: 12px;
   border: 1px solid #e4e7ec;
   border-radius: 8px;
   background: #fcfcfd;
+}
+
+.notification-item > div {
+  min-width: 0;
 }
 
 .notification-item.unread {
@@ -126,12 +132,16 @@ function iconFor(type) {
 
 .notification-item strong {
   color: #101828;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .notification-item p {
   margin: 4px 0 0;
   color: #667085;
   line-height: 1.45;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .empty-state {

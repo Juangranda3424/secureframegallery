@@ -1,5 +1,10 @@
 <template>
   <div class="login-page">
+    <router-link class="public-link" to="/public">
+      <i class="pi pi-images"></i>
+      Galeria publica
+    </router-link>
+
     <div class="cloud-path"></div>
 
     <div class="login-wrapper">
@@ -22,6 +27,25 @@ import FormLogin from '@/components/form/FormLogin.vue';
   margin: 0;
   padding: 0;
   background: #091350; /* Tu azul oscuro */
+}
+
+.public-link {
+  position: absolute;
+  top: 22px;
+  right: 24px;
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 10px 16px;
+  border-radius: 6px;
+  background: #fff;
+  color: #091350;
+  font-weight: 800;
+  text-decoration: none;
+  box-shadow: 0 12px 26px rgba(16, 24, 40, 0.18);
 }
 
 /* La forma de nube nítida y orgánica usando clip-path */

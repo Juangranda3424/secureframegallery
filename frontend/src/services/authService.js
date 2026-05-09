@@ -10,6 +10,13 @@ export const authService = {
     },
 
     /**
+     * Registro de usuario
+     */
+    register(user) {
+        return apiClient.post('/auth/register', user);
+    },
+
+    /**
      * Refrescar access token
      */
     refreshToken(token) {

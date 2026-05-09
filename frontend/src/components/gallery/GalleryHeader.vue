@@ -6,7 +6,7 @@
             <p class="heading-copy">Solicita albumes, espera aprobacion y sube imagenes para revision automatica.</p>
         </div>
         <div class="heading-actions">
-            <div class="notification-wrap">
+            <div ref="notificationWrap" class="notification-wrap">
                 <button class="notification-action" type="button" @click="$emit('toggle-notifications')">
                     <i class="pi pi-bell"></i>
                     Notificaciones
@@ -17,22 +17,15 @@
                     :notifications="notifications"
                 />
             </div>
-            <button class="primary-action" type="button" :disabled="loading" @click="$emit('refresh')">
-                <i class="pi pi-refresh"></i>
-                Actualizar
-            </button>
         </div>
     </section>
 </template>
 
 <script setup>
+import { onMounted, onUnmounted, ref } from "vue";
 import NotificationPanel from "@/components/general/NotificationPanel.vue";
 
 defineProps({
-    loading: {
-        type: Boolean,
-        default: false,
-    },
     unreadCount: {
         type: Number,
         default: 0,
@@ -47,7 +40,22 @@ defineProps({
     },
 });
 
-defineEmits(["refresh", "toggle-notifications"]);
+const emit = defineEmits(["toggle-notifications", "close-notifications"]);
+const notificationWrap = ref(null);
+
+function handleDocumentClick(event) {
+    if (!notificationWrap.value?.contains(event.target)) {
+        emit("close-notifications");
+    }
+}
+
+onMounted(() => {
+    document.addEventListener("click", handleDocumentClick);
+});
+
+onUnmounted(() => {
+    document.removeEventListener("click", handleDocumentClick);
+});
 </script>
 
 <style scoped>
@@ -90,21 +98,6 @@ defineEmits(["refresh", "toggle-notifications"]);
   position: relative;
 }
 
-.primary-action {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 40px;
-  padding: 10px 16px;
-  border: 0;
-  border-radius: 6px;
-  background: #091350;
-  color: #fff;
-  font-weight: 700;
-  cursor: pointer;
-}
-
 .notification-action {
   position: relative;
   display: inline-flex;
@@ -131,11 +124,6 @@ defineEmits(["refresh", "toggle-notifications"]);
   background: #d32626;
   color: #fff;
   font-size: 0.78rem;
-}
-
-.primary-action:disabled {
-  opacity: 0.65;
-  cursor: wait;
 }
 
 @media (max-width: 760px) {

@@ -61,14 +61,16 @@ onMounted(() => {
 });
 
 const items = computed(() => {
-    const baseItems = [
-        {
+    const baseItems = [];
+
+    if (userRole.value !== 'supervisor') {
+        baseItems.push({
             label: 'Galería',
             icon: 'pi pi-chart-bar',
             command: () => router.push('/home/galeria'),
             class: route.path.includes('galeria') ? 'active-item' : ''
-        }
-    ];
+        });
+    }
 
     if (['supervisor', 'admin'].includes(userRole.value)) {
         baseItems.push({
