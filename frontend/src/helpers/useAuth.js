@@ -28,7 +28,7 @@ export function useAuth() {
             return data;
         } catch (err) {
             error.value = err.response?.data?.detail || err.response?.data?.message || 'Error en el login';
-            throw error.value;
+            throw err;
         } finally {
             loading.value = false;
         }

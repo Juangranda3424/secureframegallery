@@ -85,6 +85,9 @@
 import { computed, onMounted, ref } from "vue";
 import albumService from "@/services/albumService.js";
 import imageService from "@/services/imageService.js";
+import { useToastGlobal } from "@/helpers/utils.js";
+
+const { msjShow } = useToastGlobal();
 
 const apiUrl = import.meta.env.VITE_API_URL.replace("/api/v1","");
 const pendingAlbums = ref([]);
@@ -105,24 +108,28 @@ async function loadData() {
 async function approveAlbum(albumId) {
     await runReviewAction(`album-approve-${albumId}`, async () => {
         await albumService.approve(albumId);
+        msjShow("success", "Album aprobado", "El album ha sido aprobado correctamente.", 3500);
     });
 }
 
 async function rejectAlbum(albumId) {
     await runReviewAction(`album-reject-${albumId}`, async () => {
         await albumService.reject(albumId);
+        msjShow("warn", "Album rechazado", "El album ha sido rechazado.", 3500);
     });
 }
 
 async function approveImage(imageId) {
     await runReviewAction(`image-approve-${imageId}`, async () => {
         await imageService.approve(imageId);
+        msjShow("success", "Imagen aprobada", "La imagen ha sido aprobada y ya es visible en la galeria.", 3500);
     });
 }
 
 async function rejectImage(imageId) {
     await runReviewAction(`image-reject-${imageId}`, async () => {
         await imageService.rejectQuarantine(imageId);
+        msjShow("warn", "Imagen rechazada", "La imagen ha sido eliminada del sistema.", 3500);
     });
     closeImage();
 }
@@ -132,6 +139,8 @@ async function runReviewAction(key, action) {
     try {
         await action();
         await loadData();
+    } catch {
+        msjShow("error", "Error", "No se pudo completar la accion. Intenta de nuevo.", 4000);
     } finally {
         actionKey.value = "";
     }
@@ -142,9 +151,38 @@ function formatAnalysis(analysis) {
         return "No hay registro de analisis para esta imagen.";
     }
 
-    return analysis
-        .map((item) => item.result || JSON.stringify(item, null, 2))
-        .join("\n\n");
+    return analysis.map((item) => {
+        let parsed;
+        try {
+            parsed = typeof item.result === "string" ? JSON.parse(item.result) : item.result;
+        } catch {
+            return item.result || JSON.stringify(item, null, 2);
+        }
+
+        const tipo = item.analysis_type?.toUpperCase() ?? "DESCONOCIDO";
+        const confianza = parsed.confidence != null
+            ? `${(parsed.confidence * 100).toFixed(1)}%`
+            : "N/A";
+        const motivos = parsed.reasons?.length
+            ? parsed.reasons.map((r) => `  • ${r}`).join("\n")
+            : "  • Sin motivos registrados";
+        const detalles = parsed.details
+            ? [
+                `  LSB balance score : ${parsed.details.lsb_balance_score?.toFixed(4) ?? "N/A"}`,
+                `  Entropia          : ${parsed.details.entropy?.toFixed(4) ?? "N/A"} bits`,
+                `  EOF sospechoso    : ${parsed.details.eof_suspicious ? "SI" : "NO"}`,
+              ].join("\n")
+            : "  Sin detalles";
+
+        return [
+            `Tipo de deteccion : ${tipo}`,
+            `Nivel de confianza: ${confianza}`,
+            `Motivos de alerta :`,
+            motivos,
+            `Detalles tecnicos :`,
+            detalles,
+        ].join("\n");
+    }).join("\n\n---\n\n");
 }
 
 function openImage(image) {

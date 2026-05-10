@@ -179,8 +179,12 @@ const login = async () => {
         router.push('/home');
         
     } catch (error) {
-        // 4. Capturamos errores 
-        msjShow('error', 'Error al iniciar sesión', 'Credenciales invalidas', 4000);
+        const status = error?.response?.status;
+        if (status === 429) {
+            msjShow('warn', 'Demasiados intentos', 'Has superado el límite de intentos. Espera un momento antes de volver a intentarlo.', 6000);
+        } else {
+            msjShow('error', 'Error al iniciar sesión', 'Credenciales invalidas', 4000);
+        }
     } finally {
         isLoading.value = false;
     }

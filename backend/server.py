@@ -8,6 +8,8 @@ from routers.image import router as image_router
 from routers.notification import router as notification_router
 from starlette.middleware.base import BaseHTTPMiddleware
 from slowapi.middleware import SlowAPIMiddleware
+from slowapi.errors import RateLimitExceeded
+from slowapi import _rate_limit_exceeded_handler
 from services.rate_limit import limiter
 import os
 from pathlib import Path
@@ -56,6 +58,7 @@ app.add_middleware(SecurityHeadersMiddleware)
 
 app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 if __name__ == "__main__":
     import uvicorn
