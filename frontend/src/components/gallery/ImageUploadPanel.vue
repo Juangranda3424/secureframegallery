@@ -53,7 +53,7 @@
             </div>
             <div class="image-grid">
                 <figure v-for="image in images" :key="image.id" class="image-card">
-                    <img :src="apiUrl + image.file_path" :alt="album.title" @click="openImage(image)">
+                    <img :src="image.file_path" :alt="album.title" @click="openImage(image)">
                     <button class="delete-image-action" type="button" @click="$emit('delete-image', image)">
                         <i class="pi pi-trash"></i>
                         Eliminar
@@ -72,7 +72,7 @@
                 <button class="close-preview" type="button" aria-label="Cerrar imagen" @click="closeImage">
                     <i class="pi pi-times"></i>
                 </button>
-                <img :src="apiUrl + previewImage.file_path" :alt="album.title">
+                <img :src="previewImage.file_path" :alt="album.title">
             </section>
         </div>
     </section>

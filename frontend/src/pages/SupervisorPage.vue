@@ -42,7 +42,7 @@
             <div v-if="quarantineImages.length" class="review-grid image-review-grid">
                 <article v-for="image in quarantineImages" :key="image.id" class="review-card">
                     <img
-                        :src="apiUrl + image.file_path"
+                        :src="image.file_path"
                         alt="Imagen en cuarentena"
                         class="quarantine-image"
                         @click="openImage(image)"
@@ -75,7 +75,7 @@
                 <button class="close-preview" type="button" aria-label="Cerrar imagen" @click="closeImage">
                     <i class="pi pi-times"></i>
                 </button>
-                <img :src="apiUrl + previewImage.file_path" alt="Imagen en cuarentena completa">
+                <img :src="previewImage.file_path" alt="Imagen en cuarentena completa">
             </section>
         </div>
     </main>

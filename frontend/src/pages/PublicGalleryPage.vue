@@ -30,7 +30,7 @@
 
             <div v-else-if="images.length" class="image-grid">
                 <figure v-for="image in images" :key="image.id" class="image-card" @click="openImage(image)">
-                    <img :src="apiUrl + image.file_path" :alt="selectedAlbum.title">
+                    <img :src="image.file_path" :alt="selectedAlbum.title">
                     <figcaption>
                         <i class="pi pi-check-circle"></i>
                         Publica
@@ -75,7 +75,7 @@
                 <button class="close-preview" type="button" aria-label="Cerrar imagen" @click="closeImage">
                     <i class="pi pi-times"></i>
                 </button>
-                <img :src="apiUrl + previewImage.file_path" :alt="selectedAlbum?.title || 'Imagen publica'">
+                <img :src="previewImage.file_path" :alt="selectedAlbum?.title || 'Imagen publica'">
             </section>
         </div>
     </main>

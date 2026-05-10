@@ -1,6 +1,6 @@
 <template>
     
-    <Card class="container-login">
+    <Card :class="{ 'container-login': true, 'register': mode === 'register' }">
         <template #header>
             <div class="container-login-card">
                 <!-- Imagen corregida: usa hero.png como placeholder -->
@@ -16,16 +16,14 @@
                     Registrarse
                 </button>
             </div>
-            <div v-if="mode === 'register'" class="container-login-card">
-                <IftaLabel class="login-div">
+            <div class="container-login-card">
+                <IftaLabel v-if="mode === 'register'" class="login-div">
                     <IconField>
                         <InputIcon class="pi pi-user" />
                         <InputText id="nameuser" v-model="name" class="components-login" @keypress.enter="submitAuth()" :disabled="isLoading"/>
                     </IconField>
                     <label for="nameuser">Nombre</label>
                 </IftaLabel>
-            </div>
-            <div class="container-login-card">
                 <IftaLabel class="login-div">
                     <IconField>
                         <InputIcon class="pi pi-envelope" />
@@ -35,23 +33,39 @@
                 </IftaLabel>
             </div>
             <div class="container-login-card">
-                <IftaLabel class="login-div">
-                    <IconField>
-                        <InputIcon class="pi pi-lock" />
-                        <Password
-                            id="password"
-                            v-model="password"
-                            toggleMask
-                            :feedback="mode === 'register'"
-                            class="components-login"
-                            @keypress.enter="submitAuth()"
-                            :disabled="isLoading"
-                        />
-                    </IconField>
-                    <label for="password">Contraseña</label>
-                </IftaLabel>
+                    <IftaLabel class="login-div">
+                        <IconField>
+                            <InputIcon class="pi pi-lock" />
+                            <Password
+                                id="password"
+                                v-model="password"
+                                toggleMask
+                                :feedback="mode === 'register'"
+                                class="components-login"
+                                @keypress.enter="submitAuth()"
+                                :disabled="isLoading"
+                            />
+                        </IconField>
+                        <label for="password">Contraseña</label>
+                    </IftaLabel>
+  
+                    <IftaLabel v-if="mode === 'register'"    class="login-div">
+                        <IconField>
+                            <InputIcon class="pi pi-lock" />
+                            <Password
+                                id="confirmPassword"
+                                v-model="confirmPassword"
+                                toggleMask
+                                :feedback="mode === 'register'"
+                                class="components-login"
+                                @keypress.enter="submitAuth()"
+                                :disabled="isLoading"
+                            />
+                        </IconField>
+                        <label for="confirmPassword">Repita contraseña</label>
+                    </IftaLabel>
             </div>
-            <div v-if="mode === 'register'" class="password-rules">
+            <div v-if="mode === 'register' && password" class="password-rules">
                 <span :class="{ ok: passwordChecks.length }">12 caracteres</span>
                 <span :class="{ ok: passwordChecks.upper }">Mayuscula</span>
                 <span :class="{ ok: passwordChecks.lower }">Minuscula</span>
@@ -110,6 +124,7 @@ const mode = ref('login');
 const name = ref('');
 const email = ref('');
 const password = ref('');
+const confirmPassword = ref('');
 const isLoading = ref(false);
 
 const passwordChecks = computed(() => ({
@@ -125,6 +140,7 @@ const passwordIsStrong = computed(() => Object.values(passwordChecks.value).ever
 const setMode = (nextMode) => {
     mode.value = nextMode;
     password.value = '';
+    confirmPassword.value = ''; 
 };
 
 const submitAuth = async () => {
@@ -174,8 +190,13 @@ const register = async () => {
     const normalizedName = name.value.trim();
     const normalizedEmail = email.value.trim().toLowerCase();
 
-    if (!normalizedName || !normalizedEmail || !password.value.trim()) {
+    if (!normalizedName || !normalizedEmail || !password.value.trim() || !confirmPassword.value.trim()) {
         msjShow('error', 'Campos requeridos', 'Por favor complete todos los campos', 3000);
+        return;
+    }
+
+    if (password.value !== confirmPassword.value) {
+        msjShow('error', 'Contraseñas no coinciden', 'Las contraseñas ingresadas no coinciden', 3000);
         return;
     }
 
@@ -198,6 +219,7 @@ const register = async () => {
         name.value = '';
         email.value = normalizedEmail;
         password.value = '';
+        confirmPassword.value = '';
     } catch (error) {
         msjShow('error', 'No se pudo registrar', error || 'No se pudo completar el registro', 4000);
     } finally {
@@ -217,6 +239,11 @@ const register = async () => {
 .container-login {
     width: 100%;
     max-width: 25rem;
+}
+
+.container-login.register {
+    width: 100%;
+    max-width: 40rem;
 }
 
 .auth-mode {
@@ -255,11 +282,11 @@ const register = async () => {
 }
 
 .password-rules span {
-    padding: 4px 8px;
+    padding: 2px;
     border-radius: 999px;
     background: #f2f4f7;
     color: #667085;
-    font-size: 0.76rem;
+    font-size: 0.8rem;
     font-weight: 800;
 }
 

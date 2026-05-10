@@ -35,6 +35,7 @@ textarea {
     justify-content: center;
     align-items: center;
     margin: 2rem 0rem;
+    gap: 0.5rem;
 }
 
 .login-div{
