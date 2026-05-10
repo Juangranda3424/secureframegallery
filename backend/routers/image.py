@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from typing import Optional
 import json
 import re
+from storage3.exceptions import StorageApiError
 from routers.auth import get_current_user
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -16,6 +17,8 @@ from config.db import supabase, supabase_admin
 router = APIRouter(tags=["images"])
 
 db = supabase_admin or supabase
+storage_client = supabase_admin or supabase
+STORAGE_BUCKET = "archivos"
 
 #DATOS DEL FRONT
 class ImageSchema(BaseModel):
@@ -76,14 +79,20 @@ async def upload_images(album_id: str, file: UploadFile = File(...), token: str 
     filename = f"{uuid4().hex}_{safe_name}"
     storage_path = f"albums/{album_id}/{filename}"
     
-    # Subir a Supabase Storage
-    upload_response = supabase_admin.storage.from_("archivos").upload(
-        path=storage_path,
-        file=clean_content,
-        file_options={
-            "content-type": file.content_type
-        }
-    )
+    try:
+        # Subir a Supabase Storage
+        upload_response = storage_client.storage.from_(STORAGE_BUCKET).upload(
+            path=storage_path,
+            file=clean_content,
+            file_options={
+                "content-type": file.content_type
+            }
+        )
+    except StorageApiError as exc:
+        detail = str(exc)
+        if "Bucket not found" in detail:
+            detail = f"No existe el bucket '{STORAGE_BUCKET}' en Supabase Storage."
+        raise HTTPException(status_code=502, detail=detail) from exc
 
     # Validar subida
     if not upload_response:
@@ -93,7 +102,7 @@ async def upload_images(album_id: str, file: UploadFile = File(...), token: str 
         )
 
     # Obtener URL pública
-    public_url = supabase_admin.storage.from_("archivos").get_public_url(
+    public_url = storage_client.storage.from_(STORAGE_BUCKET).get_public_url(
         storage_path
     )
 
