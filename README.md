@@ -43,6 +43,8 @@ VITE_API_TIMEOUT=100000
 
 Backend:
 
+Linux 
+
 ```bash
 cd backend
 python -m venv venv
@@ -50,8 +52,18 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+Windows (PowerShell):
+
+```bash
+cd backend
+python -m venv venv
+source venv/Scripts/activate
+pip install -r requirements.txt
+```
+
 Frontend:
 
+Windows/Linux/MacOS:
 ```bash
 cd frontend
 npm install
@@ -61,9 +73,17 @@ npm install
 
 Levantar backend:
 
+Linux
 ```bash
 cd backend
 source venv/bin/activate
+python server.py
+```
+
+Windows (PowerShell):
+```bash
+cd backend
+source venv/Scripts/activate
 python server.py
 ```
 
@@ -85,6 +105,13 @@ La aplicacion queda disponible normalmente en:
 ```text
 http://localhost:5173
 ```
+
+## Supabase
+
+- Crea un proyecto en Supabase.
+- Corre el script `supabase.sql` para crear las tablas
+- En Storage, crea un bucket llamado `archivos` con acceso público y un tamaño máximo de 10MB.
+
 
 ## Docker
 

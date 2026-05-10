@@ -71,21 +71,38 @@ async def upload_images(album_id: str, file: UploadFile = File(...), token: str 
     analysis = detect_steganography(content)
     clean_content = strip_exif(content)
 
-    uploads_dir = Path(__file__).resolve().parent.parent / "uploads"
-    uploads_dir.mkdir(parents=True, exist_ok=True)
-
     original_name = Path(file.filename or "imagen").name
     safe_name = re.sub(r"[^A-Za-z0-9._-]+", "_", original_name).strip("._") or "imagen"
     filename = f"{uuid4().hex}_{safe_name}"
-    file_path = uploads_dir / filename
-    file_path.write_bytes(clean_content)
+    storage_path = f"albums/{album_id}/{filename}"
+    
+    # Subir a Supabase Storage
+    upload_response = supabase_admin.storage.from_("archivos").upload(
+        path=storage_path,
+        file=clean_content,
+        file_options={
+            "content-type": file.content_type
+        }
+    )
+
+    # Validar subida
+    if not upload_response:
+        raise HTTPException(
+            status_code=500,
+            detail="Error al subir la imagen al storage"
+        )
+
+    # Obtener URL pública
+    public_url = supabase_admin.storage.from_("archivos").get_public_url(
+        storage_path
+    )
 
 
     image_status = "quarantined" if analysis["is_suspicious"] else "approved"
 
     image_data = {
         "album_id": album_id,
-        "file_path": f"/uploads/{filename}",
+        "file_path": public_url,
         "status": image_status
     }
 
