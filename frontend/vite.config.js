@@ -10,4 +10,11 @@ export default defineConfig({
     }
   },
   plugins: [vue()],
+  server: {
+    host: true,
+    port: 5173,
+    allowedHosts: [
+      'dev.metabasebusinessplus.com'
+    ]
+  }
 })
