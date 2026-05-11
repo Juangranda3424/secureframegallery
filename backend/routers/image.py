@@ -137,14 +137,44 @@ async def delete_image(image_id: UUID, album_id: UUID, token: str = Depends(get_
         raise HTTPException(status_code=404, detail="Imagen no encontrada")
 
     image = image_resp.data[0]
-    response = db.table("images").delete().eq("id", image_id).eq("album_id", album_id).execute()
-    if not response.data:
-        raise HTTPException(status_code=404, detail="Imagen no encontrada")
 
-    upload_path = Path(__file__).resolve().parent.parent / image["file_path"].lstrip("/")
-    upload_path.unlink(missing_ok=True)
+    file_url = image["file_path"]
 
-    return {"message": f"Imagen with ID {image_id} deleted"} 
+    marker = "/storage/v1/object/public/archivos/"
+    if marker in file_url:
+        storage_path = file_url.split(marker)[1]
+    else:
+        raise HTTPException(
+            status_code=500,
+            detail="No se pudo determinar la ruta del archivo en Storage"
+        )
+    
+    storage_response = (
+        supabase_admin.storage
+        .from_("archivos")
+        .remove([storage_path])
+    )
+
+    db.table("image_analysis").delete().eq("image_id", image_id).execute()
+
+    delete_resp = (
+        db.table("images")
+        .delete()
+        .eq("id", image_id)
+        .eq("album_id", album_id)
+        .execute()
+    )
+
+    if not delete_resp.data:
+        raise HTTPException(
+            status_code=500,
+            detail="No se pudo eliminar la imagen de la base de datos"
+        )
+
+    return {
+        "message": f"Imagen {image_id} eliminada correctamente",
+        "storage_path": storage_path
+    }
 
 
 #Estos endpoints son para revision manual de las imagenes
