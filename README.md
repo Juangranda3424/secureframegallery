@@ -125,7 +125,7 @@ Supervisor:
 
 ```text
 correo: admin@test.com
-password: Admin123*
+password: Password1234!.
 rol: supervisor
 ```
 
@@ -133,7 +133,7 @@ Usuario:
 
 ```text
 correo: user@test.com
-password: User123*
+password: Password1234!.
 rol: user
 ```
 

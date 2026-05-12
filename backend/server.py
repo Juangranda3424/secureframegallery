@@ -20,25 +20,12 @@ app = FastAPI(title="SecureFrame Gallery API", version="1.0")
 uploads_dir = Path(__file__).resolve().parent / "uploads"
 uploads_dir.mkdir(parents=True, exist_ok=True)
 
-# Configurar CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=os.getenv("CORS_ORIGINS", "*").split(","),
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"]
-)
-
 # Incluir routers
 app.include_router(auth_router, prefix="/api/v1/auth")
 app.include_router(album_router, prefix="/api/v1/albums")
 app.include_router(image_router, prefix="/api/v1/albums")
 app.include_router(notification_router, prefix="/api/v1/notifications")
 app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
-
-# Aquí podrías incluir otros routers para CRUD de imágenes, etc. Es una buena utilizar /api/v1/ para versionar tu API desde el principio.
-# app.include_router(router, prefix="/api/v1")
-# app.include_router(crud_router, prefix="/api/v1")
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
@@ -59,6 +46,17 @@ app.add_middleware(SecurityHeadersMiddleware)
 app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# CORS debe agregarse de último para quedar como middleware más externo.
+# Así cubre las respuestas de error que genera BaseHTTPMiddleware (500s) y
+# garantiza que el header Access-Control-Allow-Origin esté siempre presente.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=os.getenv("CORS_ORIGINS", "*").split(","),
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
 
 if __name__ == "__main__":
     import uvicorn

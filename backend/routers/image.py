@@ -184,13 +184,19 @@ async def list_quarantine(token=Depends(require_role(Role.SUPERVISOR, Role.ADMIN
 @router.patch("/quarantine/{image_id}/approve")
 async def approve_image(image_id: UUID, token=Depends(require_role(Role.SUPERVISOR, Role.ADMIN))):
     """Supervisor aprueba la imagen de cuarentena"""
-    image_resp = db.table("images").select("*").eq("id", image_id).single().execute()
-    image = image_resp.data
+    try:
+        image_resp = db.table("images").select("*").eq("id", image_id).single().execute()
+        image = image_resp.data
+    except Exception:
+        image = None
     if not image:
         raise HTTPException(status_code=404, detail="Imagen no encontrada")
 
-    album_resp = db.table("albums").select("id,title,owner_id").eq("id", image["album_id"]).single().execute()
-    album = album_resp.data
+    try:
+        album_resp = db.table("albums").select("id,title,owner_id").eq("id", image["album_id"]).single().execute()
+        album = album_resp.data
+    except Exception:
+        album = None
 
     response = db.table("images").update({"status": "approved"}).eq("id", image_id).execute()
 
@@ -211,12 +217,18 @@ async def approve_image(image_id: UUID, token=Depends(require_role(Role.SUPERVIS
 @router.delete("/quarantine/{image_id}/reject")
 async def reject_quarantine_image(image_id: UUID, token=Depends(require_role(Role.SUPERVISOR, Role.ADMIN))):
     """Supervisor rechaza y borra imagen de cuarentena"""
-    img = db.table("images").select("*").eq("id", image_id).single().execute().data
+    try:
+        img = db.table("images").select("*").eq("id", image_id).single().execute().data
+    except Exception:
+        img = None
     if not img:
         raise HTTPException(status_code=404, detail="Imagen no encontrada")
 
-    album_resp = db.table("albums").select("id,title,owner_id").eq("id", img["album_id"]).single().execute()
-    album = album_resp.data
+    try:
+        album_resp = db.table("albums").select("id,title,owner_id").eq("id", img["album_id"]).single().execute()
+        album = album_resp.data
+    except Exception:
+        album = None
 
     upload_path = Path(__file__).resolve().parent.parent / img["file_path"].lstrip("/")
     upload_path.unlink(missing_ok=True)
